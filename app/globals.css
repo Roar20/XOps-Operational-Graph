@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: light; }
+
+body {
+  @apply bg-ink-50 text-ink-900 antialiased;
+}
+
+@layer components {
+  .card { @apply rounded-lg border border-ink-200 bg-white; }
+  .card-pad { @apply p-4; }
+  .label { @apply text-[11px] font-semibold uppercase tracking-wide text-ink-500; }
+  .subtle { @apply text-xs text-ink-500; }
+  .num { @apply font-mono tabular-nums; }
+  .btn {
+    @apply inline-flex items-center gap-1.5 rounded-md border border-ink-300 bg-white px-2.5 py-1.5
+           text-xs font-medium text-ink-700 transition hover:bg-ink-50 focus:outline-none
+           focus:ring-2 focus:ring-ink-400;
+  }
+  .btn-active { @apply border-ink-800 bg-ink-900 text-white hover:bg-ink-800; }
+  .input {
+    @apply w-full rounded-md border border-ink-300 bg-white px-2.5 py-1.5 text-sm text-ink-900
+           placeholder:text-ink-400 focus:border-ink-500 focus:outline-none focus:ring-1 focus:ring-ink-500;
+  }
+  .th { @apply whitespace-nowrap px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-ink-500; }
+  .td { @apply whitespace-nowrap px-3 py-2 text-sm text-ink-800; }
+  .row-hover { @apply hover:bg-ink-50; }
+}
+
+/* Barra de scroll discreta en tablas largas */
+.scroll-thin::-webkit-scrollbar { height: 10px; width: 10px; }
+.scroll-thin::-webkit-scrollbar-thumb { @apply rounded bg-ink-300; }
+.scroll-thin::-webkit-scrollbar-track { @apply bg-ink-100; }
