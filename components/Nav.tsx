@@ -16,13 +16,10 @@ export function Nav() {
       {LINKS.map((l) => {
         const active = l.href === "/" ? path === "/" : path.startsWith(l.href);
         return (
-          <Link
-            key={l.href}
-            href={l.href}
-            className={`rounded-md px-2.5 py-1.5 text-sm font-medium transition ${
-              active ? "bg-ink-900 text-white" : "text-ink-600 hover:bg-ink-100 hover:text-ink-900"
-            }`}
-          >
+          <Link key={l.href} href={l.href}
+            className={`rounded px-2.5 py-1.5 text-sm font-medium transition ${
+              active ? "bg-pep-900 text-white" : "text-ink-700 hover:bg-pep-100 hover:text-pep-900"
+            }`}>
             {l.label}
           </Link>
         );

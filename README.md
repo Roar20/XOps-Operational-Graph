@@ -1,66 +1,116 @@
 # XOps Operational Graph — POC v1
 
-Centro de comando operativo del portafolio BI y AI/ML. Responde tres preguntas:
+Centro de comando operativo del portafolio BI y AI/ML de PepsiCo. Responde tres preguntas:
 **qué está roto, a quién le pega, y quién debe responder.**
 
-Corte de datos declarado: **2026-08-21**.
+Corte de datos declarado: **2026-08-21**. Corte del corpus de calidad: **2026-08-12**.
 
 ## Alcance
 
-**v1 cubre** impacto por proceso y por ruteo, sobre 504 aplicaciones.
+**v1 cubre** impacto por proceso y ruteo, sobre 504 aplicaciones.
 
 **v1 NO cubre**, y la aplicación lo declara en pantalla en lugar de ocultarlo:
 
 - Impacto por audiencia de usuarios.
 - Linaje de pipelines.
-- El eslabón Dashboard → Aplicación, excluido por decisión de alcance, no por olvido.
+- El eslabón Dashboard → Aplicación, excluido **por decisión de alcance, no por olvido**.
+  De 159 workspaces catalogados, 0 tienen aplicación confirmada.
 - RCA Intelligence, Agent Actions y escritura hacia ServiceNow.
+
+La cobertura parcial declarada es el argumento de esta POC, no su defecto. Ningún dato
+faltante se imputa y ningún registro incompleto se filtra para que la interfaz se vea mejor.
+
+## Origen de los datos
+
+`data/xops-operational-graph-data.json` **es el extracto real**, proyectado desde la capa
+semántica `XOps_Operational_Graph_Semantic_Layer_v3.xlsx` por `scripts/build_data.py`.
+
+```bash
+npm run data     # regenera el JSON desde el xlsx y verifica 21 invariantes
+```
+
+El script falla si algún invariante deja de cumplirse. No hay datos sintéticos en el
+repositorio y ningún módulo de la aplicación lee del generador en tiempo de ejecución.
+
+### Decisiones de proyección que vale la pena conocer
+
+- **El puente es la fuente del eslabón Aplicación → Assignment Group.** La columna
+  `assignment_groups` del inventario está topada en 10 entradas y corta el último nombre a
+  la mitad; sólo se usa donde no hay fila de puente. De ahí salen las 113 aplicaciones con
+  más de un AG y la que llega a 14.
+- **Las listas traen su propio separador.** Las plataformas usan coma y los assignment
+  groups punto y coma, porque sus nombres contienen comas internas
+  (`REAL ESTATE, FACILITIES SUPPORT CGF`).
+- **El eslabón Plataforma → Aplicación mezcla dos autoridades.** 91 filas vienen del
+  análisis de Tech Buckets (**E2**) y el resto de normalizar el texto libre
+  `Technology Stack` (**E3**). No se promedian: se desglosan, y la ficha de aplicación
+  muestra `technology_raw` junto a las plataformas derivadas.
+- **Consumo no se publica en v1.** Ninguna de las 838 filas de consumo trae
+  `app_id_confirmed`, por lo tanto no puede unirse a ninguna aplicación. Se emiten sólo con
+  `python3 scripts/build_data.py --with-consumption`.
+
+### Cifras del corte
+
+| | |
+|---|---|
+| Aplicaciones · plataformas · assignment groups · eslabones | 504 · 38 · 268 · 4 |
+| L1 Plataforma → Aplicación | 240 de 504 · hueco 264 |
+| L2 Aplicación → Assignment Group | 312 de 504 · hueco 192 |
+| L3 Aplicación → DPM sin TBD | 383 de 504 · hueco 121 |
+| L4 Aplicación → Proceso y Sector | 373 de 504 · hueco 131 |
+| Sin criticidad declarada (`C-`) | 324 de 504 |
+| Apps con más de un AG · máximo en una app | 113 · 14 (AISP AZURE KUBERNETES SERVICE) |
+| AI/ML: total · ruteables · con DPM · con plataforma | 142 · 52 · 81 · 32 |
+| Corpus de calidad: elegibles de crudos | 242 706 de 277 408 |
+| Claves de AG unidas al corpus | 79 de 265 |
+| Series temporales: semanas · meses · trimestres · años | 138 · 33 · 12 · 4 |
+
+### Diferencias contra las cifras esperadas en la especificación
+
+Se reportan en lugar de ajustarse. El dato manda:
+
+| Cifra | Especificación | Extracto real |
+|---|---|---|
+| TERADATA + SAP_BW: unión · suma · traslape | 43 · 51 · 8 | **47 · 56 · 9** |
+| AGs alcanzables por TERADATA | 33 | **31** |
+| AGs alcanzables por POWER_BI | 46 | **42** |
+| Join de calidad: AGs unidos | 77 de 237 | **79 de 265** |
+| Patrones recurrentes | 150 | **200** |
+| Periodos: meses · trimestres | 50 · 17 | **33 · 12** |
+| Plataformas en el catálogo | 25 | **38** |
+
+Las cifras de apps directas (TERADATA 30, POWER_BI 129), procesos (6) y todo el bloque
+AI/ML (142 · 52 · 81 · 32) sí coinciden. La brecha en conteos de AG es consistente con
+**DQ1**: nombres distintos que colapsan a la misma clave normalizada.
+
+### Hallazgos de calidad de dato, declarados y no normalizados
+
+- **DQ1** — claves de AG duplicadas: 268 nombres colapsan a 265 claves normalizadas.
+  Por eso el denominador de "claves unidas al corpus" es 265 y no 268.
+- **DQ2** — hueco entre el `ag_count` declarado por el inventario y el conteo real del puente.
+
+Ambos viajan en `meta.data_quality_notes` y se muestran en la aplicación.
 
 ## Stack
 
 - Next.js 15 (App Router) + TypeScript, desplegable en Vercel sin configuración adicional.
-- Sin backend ni base de datos. Un único `data/xops-operational-graph-data.json` importado
-  estáticamente. Las 504 fichas de aplicación se prerenderizan en build.
+- **Sin backend, sin base de datos, sin autenticación, sin variables de entorno.** Un único
+  JSON importado estáticamente. Las 504 fichas de aplicación se prerenderizan en build
+  (511 rutas estáticas en total).
 - Tailwind, sin librería de componentes.
-- Recharts, sólo donde una tabla no basta: series de calidad, comparativo de cobertura AI/ML
-  y distribución de Decálogo.
+- Recharts, sólo donde una tabla no basta: serie de calidad, comparativo de cobertura AI/ML
+  y distribución del Decálogo.
 
 ## Comandos
 
 ```bash
 npm install
-npm run seed        # regenera el dataset semilla y verifica 23 invariantes
+npm run data        # regenera data/*.json desde el xlsx (requiere openpyxl)
 npm run dev         # http://localhost:3000
 npm run build       # build de producción
 npm run typecheck
+npm run verify      # criterios de aceptación contra la app corriendo
 ```
-
-## Estado de los datos
-
-> **El repositorio no incluye el extracto real.** `data/xops-operational-graph-data.json`
-> lo genera `scripts/generate-seed-data.mjs`: son **datos sintéticos** que respetan el
-> contrato de la sección 3 de la especificación y **reproducen exactamente los agregados
-> declarados** al corte. Sirven para que la aplicación sea ejecutable y para que los
-> criterios de aceptación se puedan verificar en pantalla.
-
-El generador falla si algún invariante deja de cumplirse. Los 23 que verifica:
-
-| Invariante | Valor |
-|---|---|
-| Aplicaciones / plataformas / assignment groups / eslabones | 504 / 38 / 268 / 4 |
-| Sin AG · sin DPM confirmado · sin atribución completa | 339 · 221 · 279 |
-| Ruteables · con plataforma | 165 · 240 |
-| C1 · C3 | 43 · 32 |
-| Apps con más de un AG · máximo de AGs en una app | 113 · 14 |
-| AI/ML: total · ruteables · con DPM · con plataforma | 142 · 52 · 81 · 32 |
-| Plataformas marcadas `is_ai_platform` | 6 |
-| Teradata directo · SAP BW directo · **unión** | 28 · 23 · **43** (la suma daría 51) |
-| AGs con corpus de calidad · patrones recurrentes | 140 · 150 |
-
-**Para usar el extracto real:** reemplazar `data/xops-operational-graph-data.json`
-conservando el esquema de `lib/types.ts`. Ningún módulo lee del generador en tiempo de
-ejecución, y ninguna cifra de la interfaz está escrita a mano: todo el panel de hueco,
-las uniones de blast radius y las coberturas por subconjunto se calculan desde el JSON.
 
 ## Pantallas
 
@@ -68,55 +118,51 @@ las uniones de blast radius y las coberturas por subconjunto se calculan desde e
 |---|---|
 | `/` | Portfolio Health — 4 eslabones de cobertura, tabla filtrable de 504 apps, panel fijo de hueco declarado |
 | `/blast-radius` | Blast Radius — selector multi-plataforma, unión deduplicada, procesos afectados, ruta de respuesta |
-| `/app/[app_id]` | Application Resolver — ficha completa y **todos** los Assignment Groups |
-| `/quality` | Work Notes Quality — línea base y delta, series por 4 granularidades, ranking por AG, patrones recurrentes, Decálogo |
-| `/ai-ops` | AI Ops — vista filtrada del segmento AI/ML con narrativa propia |
+| `/app/[app_id]` | Application Resolver — identidad, atribución, propiedad, operación con **todos** los Assignment Groups |
+| `/quality` | Work Notes Quality — corpus y elegibilidad, línea base y delta, series en 4 granularidades, ranking por AG, candidatos a SOP, Decálogo, patrones recurrentes |
+| `/ai-ops` | AI Ops — el segmento AI/ML medido con los mismos cuatro eslabones que el resto |
 
-El buscador global (nombre o APM, `⌘K`) y el panel **Cómo leer esto** están en el layout,
-por lo tanto son accesibles desde las cinco pantallas.
+El buscador global (nombre o APM, `⌘K`) y el panel **Cómo leer esto** viven en el layout,
+por lo tanto son accesibles desde las cinco pantallas, igual que la fecha de corte.
 
 ## Dónde viven las reglas del modelo
 
-Las reglas no son comentarios: están implementadas en un solo lugar cada una, de modo que
-una pantalla no pueda violarlas por descuido.
+Las reglas no son comentarios: cada una está implementada en un solo lugar, de modo que una
+pantalla no pueda violarla por descuido.
 
 | Regla | Implementación |
 |---|---|
-| **R1** blast radius no aditivo | `computeBlast()` en `lib/selectors.ts` construye la unión deduplicada; la suma ingenua se conserva sólo para mostrarla tachada |
-| **R2** toda cifra con denominador | `<Metric>` / `<InlineMetric>` exigen `resolved` y `universe`; son el único camino para presentar una proporción |
-| **R3** tickets = costo, no riesgo | `<SupportLoad>` usa un color neutro fijo y la etiqueta "carga de soporte"; ordena en su propia columna |
-| **R4** lo no resuelto se declara | `<TbdValue>`, `<NotRoutableTag>`, `<GateChips>` y `computeGaps()`; ningún filtro descarta el hueco |
-| **R5** nivel de evidencia | `<EvidenceBadge>`, con E3 marcado como baja autoridad en cada tarjeta y cada cifra derivada |
-| **R6** un solo instrumento | La pantalla de calidad declara QN v2.4.2 y muestra la divergencia contra la regla binaria sin mezclar bandas |
-| **R7** denominador de elegibilidad | `CorpusStamp` acompaña cada sección de calidad con 242.706 de 277.408 y los close codes excluidos |
-| **R8** base posterior al quiebre | Ventana base 2025-08-01…2026-01-31, sombreada en la serie, con el quiebre 2025Q3 marcado |
-| **R9** derivación visible | La ficha de aplicación expone `technology_raw` y el tier de evidencia de la clasificación de plataforma |
-| **dirección del delta** | `deltaTone()` en `components/DeltaMetric.tsx` es la única función que decide el color de un delta, y lee `direccion_deseada`, nunca el signo |
+| **R1** la Business Application es la espina dorsal | `types/index.ts` · toda entidad se relaciona con `Application`, nunca entre sí |
+| **R2** toda relación es N:M | `platforms[]` y `ags[]` son listas; `agsOf()` / `platformsOf()` nunca devuelven un escalar |
+| **R3** ninguna métrica sin su cobertura | `<Metric>` / `<InlineMetric>` exigen `resolved` y `universe`; no existe camino para renderizar un porcentaje suelto. Las tablas de tasas declaran su denominador en `<TableCaption>` |
+| **R4** blast radius no aditivo | `computeBlast()` en `lib/data.ts` construye la unión deduplicada; la suma ingenua se conserva sólo para mostrarla tachada junto al traslape |
+| **R5** tickets = costo, nunca riesgo | `<SupportLoad>` usa un color neutro único y la etiqueta "eje de costo, no de riesgo" |
+| **R6** un solo instrumento de calidad | `/quality` declara QN v2.4.2 y expone la divergencia contra la regla binaria del xlsx sin mezclar bandas |
+| **R7** la normalización es derivación declarada | La ficha de aplicación expone `technology_raw` y el tier E2/E3 de la clasificación de plataforma |
+| **R8** cada fila de puente lleva evidencia y fuente | `<EvidenceBadge>` con `meta.link_sources` en el punto donde se usa el dato |
+| lo no resuelto se declara | `<TbdValue>`, `<NotRoutableTag>`, `<GateChips>`, `computeGaps()`; ningún filtro descarta el hueco |
+| elegibilidad como parte de la métrica | `quality.meta.eligibility_rule` y `eligibility_effect` acompañan al corpus 242 706 de 277 408 |
+| línea base posterior al quiebre | Ventana 2025-08-01 → 2026-01-31, sombreada en la serie, con el quiebre 2025Q3 escrito |
+| dirección del delta | `deltaTone()` en `components/Delta.tsx` es la única función que decide el color de un delta, y lee `direccion_deseada`, nunca el signo |
 
 ## Extensión prevista (sección 7), sin rehacer pantallas
 
-El contrato ya declara los ganchos y el código los trata como opcionales:
+- `types/index.ts` ya define `ConsumptionRow` y `GraphData.consumption?` como opcional;
+  `Application` admite `audience` como campo nuevo sin romper el contrato.
+- `lib/data.ts` expone `consumption` y `hasConsumption`, hoy en `false`.
+- `subsetCoverage()` recalcula los cuatro eslabones sobre **cualquier** subconjunto, por lo
+  tanto un eslabón nuevo entra sin tocar las pantallas.
+- `computeBlast()` aísla el ponderado: incorporar audiencia es agregar un término, no
+  rehacer la pantalla. Hoy la pantalla declara que ese factor no existe y no se estima.
+- `meta.dashboard_link` ya viaja con el estado del eslabón (159 workspaces, 0 confirmados)
+  y se muestra como límite declarado en la ficha de aplicación.
 
-- `lib/types.ts` define `Dashboard` y `Audience`, y `GraphData.dashboards?` / `Application.audience?`.
-- `lib/data.ts` expone `hasDashboardLink` y `hasAudience`, hoy en `false`.
-- `subsetCoverage()` recalcula cobertura sobre cualquier subconjunto, por lo tanto admite
-  eslabones nuevos sin tocar las pantallas existentes.
-- El blast radius ponderado está aislado en `computeBlast()`: incorporar audiencia es
-  agregar un término, no rehacer la pantalla. La pantalla ya declara que hoy ese factor
-  no existe y no se estima.
+## Verificación
 
-## Nota de modelado: registro no es ruteo
-
-El eslabón declarado L4 mide presencia en ServiceNow CMDB (373 de 504). La compuerta
-**Ruteable** exige al menos un Assignment Group declarado en el alcance (165 de 504).
-Son dos medidas distintas y la aplicación muestra ambas por separado, en `/` y en
-`/ai-ops`, en lugar de promediarlas u ocultar la diferencia.
-
-## Verificación de los criterios de aceptación
-
-`scripts/verify-acceptance.mjs` comprueba los 12 criterios de la sección 6 contra la
-aplicación corriendo (14 aserciones, algunas cubren un criterio en dos partes). Falla
-con código 1 si alguno deja de cumplirse.
+`scripts/verify-acceptance.mjs` comprueba los criterios de la sección 6 y caza los
+antipatrones del prompt 6 contra la aplicación corriendo. **Ninguna cifra esperada está
+escrita a mano**: todas se derivan del JSON, de modo que si el dato cambia, el verificador
+sigue siendo válido y es la interfaz la que tiene que seguirle el paso.
 
 ```bash
 npm run build
@@ -125,19 +171,35 @@ npm i -D playwright --no-save     # sólo para verificar; no es dependencia del 
 npm run verify
 ```
 
-Estado al último corte: **14/14**.
+Estado al último corte: **30/30**.
 
-| Criterio | Cómo se verifica |
-|---|---|
-| 1 · unión, nunca suma | Selecciona Teradata + SAP BW y exige 43, la suma 51 tachada y el traslape 8 |
-| 2 · toda cifra con denominador | Exige `240 de 504` y `47.6%` en las tarjetas de cobertura |
-| 3 · app sin AG visible y etiquetada | Abre una app sin AG y busca "No ruteable"; comprueba 339 / 221 / 279 en el panel de hueco |
-| 4 · DPM TBD como TBD | Busca el chip TBD en el campo DPM |
-| 5 · panel de reglas accesible | Lo abre en las 5 rutas y exige R1…R9 |
-| 6 · corte permanente | Exige `2026-08-21` en las 5 rutas |
-| 7 · E3 marcados | Exige al menos 3 marcas "baja autoridad" |
-| 8 · tickets sin semáforo | Comprueba que la columna use un único estilo en todas las filas |
-| 9 · delta por dirección deseada | Exige que `-5.2 pp` de Poor en críticos venga en verde y con la palabra "mejora" |
-| 10 · corpus y elegibilidad visibles | Exige `242,706 de 277,408` repetido y los umbrales 36.6% → 41.8% |
-| 11 · granularidad sin recargar | Conmuta las 4 series y exige 4 conteos de periodo distintos con la misma navegación |
-| 12 · candidato a SOP | Exige la etiqueta en la tabla y la lectura explícita en pantalla |
+Entre lo que comprueba: que la unión deduplicada aparezca y la suma sólo tachada; que no
+exista un porcentaje sin denominador en ninguna de las cinco rutas; que un delta negativo
+con `down_is_good` se pinte **verde**; que las aplicaciones sin ruta sigan publicadas; que
+la fecha de corte y el panel de reglas estén en las cinco pantallas; y que los ganchos de
+la sección 7 sigan en el contrato.
+
+## Paleta
+
+Azul PepsiCo `#02355A` dominante, `#155798` y `#3680CE` de apoyo, fondo `#F5F4F0`. Sobria
+y de alta densidad de información: está pensada para proyectarse en sala de juntas.
+
+Los colores de las gráficas están validados como rampa monocroma: extremo claro por encima
+del piso de 2:1 de contraste contra el fondo blanco de las tarjetas y separación de
+luminosidad ≥ 0.06 en OKLCH entre pasos. Por eso el riel de volumen es `#93AFC9` y la
+serie de referencia `#8496A8`, no los azules más pálidos de la paleta de interfaz.
+
+## Despliegue
+
+Vercel, preset Next.js, sin variables de entorno y sin secretos. `npm run build` produce
+511 rutas estáticas.
+
+**Tamaño, medido y no estimado.** El JSON pesa 692 KB en disco y **sí viaja al navegador**:
+las tres pantallas interactivas (blast radius, calidad, AI Ops) recalculan uniones,
+coberturas y ponderados en el cliente, y sin backend no hay dónde más hacerlo. El chunk que
+lo contiene son 700 KB sin comprimir, **86 KB con gzip**, compartido por las rutas que lo
+necesitan y cacheado tras la primera. Las páginas más pesadas (`/quality` y `/ai-ops`,
+315 kB de First Load JS) lo son por Recharts, no por el dato.
+
+Si el extracto creciera un orden de magnitud, la salida sería precomputar por pantalla en
+`build_data.py` — no un backend, que sigue estando fuera del diseño de esta POC.
