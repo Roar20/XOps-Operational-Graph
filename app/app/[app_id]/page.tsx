@@ -5,6 +5,7 @@ import {
   multiAgApps, maxAgCount, UNIVERSE, quality, isTbd, computeGaps,
 } from "@/lib/data";
 import { AiTag, ApproxTag, CriticalityChip, GateChips, NotRoutableTag, SupportLoad, TbdValue } from "@/components/Chips";
+import { ImpactChip } from "@/components/ImpactChip";
 import { InlineMetric, Metric } from "@/components/Metric";
 import { Note, SectionHeader, TableCaption } from "@/components/SectionHeader";
 import { EvidenceBadge } from "@/components/EvidenceBadge";
@@ -46,7 +47,7 @@ export default async function AppResolverPage({ params }: { params: Promise<{ ap
   const ags = agsOf(app);
   const plats = platformsOf(app);
   const q = qualityOfAgs(app.ags);
-  const sectors = app.sector.split(",").map((s) => s.trim()).filter(Boolean);
+  const bi = app.business_impact;
   const agSourceLabel = app.ag_source_kind === "bridge"
     ? "the Application → Assignment Group bridge (complete list)"
     : app.ag_source_kind === "inventory"
@@ -85,14 +86,36 @@ export default async function AppResolverPage({ params }: { params: Promise<{ ap
           <SectionHeader title="Attribution" kicker="Block 2" />
           <dl className="space-y-3">
             <Field label="Business process"><TbdValue value={app.process} /></Field>
-            <Field label="Sector">
-              {sectors.length === 0 ? <TbdValue value={null} /> : (
+            <Field
+              label="Sector"
+              hint={app.sectors.length > 1
+                ? "This application serves several sectors, so it is counted in each of their rows."
+                : undefined}
+            >
+              {app.sectors.length === 0 ? <TbdValue value={null} /> : (
                 <span className="flex flex-wrap gap-1">
-                  {sectors.map((s) => (
-                    <span key={s} className="rounded border border-ink-200 bg-ink-50 px-1.5 py-0.5 text-[11px]">{s}</span>
+                  {app.sectors.map((x) => (
+                    <Link key={x} href={`/sectors#${x}`}
+                          className="rounded border border-ink-200 bg-ink-50 px-1.5 py-0.5 text-[11px] hover:border-pep-500 hover:text-pep-700">
+                      {x}
+                    </Link>
                   ))}
                 </span>
               )}
+            </Field>
+            {/* DQ4 · el token no reconocido se muestra, no se borra. */}
+            {app.sector_unrecognized.length > 0 ? (
+              <Field
+                label="Unrecognised token in the sector column"
+                hint="It matches the ServiceNow service-ID pattern, not a sector, so it is quarantined rather than counted. See DQ4."
+              >
+                <span className="num rounded border border-ev-e3/40 bg-ev-e3/10 px-1.5 py-0.5 text-xs text-ev-e3">
+                  {app.sector_unrecognized.join(", ")}
+                </span>
+              </Field>
+            ) : null}
+            <Field label="Raw sector cell" hint="Kept verbatim, before normalization.">
+              <span className="num text-xs text-ink-600">{app.sector || "empty"}</span>
             </Field>
             <Field label="Normalized criticality"><CriticalityChip value={app.criticality} withLabel /></Field>
             {/* R7 · normalization does not erase the source vocabulary: both are still in circulation. */}
@@ -120,6 +143,25 @@ export default async function AppResolverPage({ params }: { params: Promise<{ ap
             <Field label="Tech lead"><TbdValue value={app.tech_lead} /></Field>
             <Field label="Service tier"><Raw value={app.service_tier} /></Field>
             <Field label="Support window"><Raw value={app.support_window} /></Field>
+            {/* Impacto de negocio: nivel declarado o ausencia explicita, nunca Low por omision. */}
+            <Field
+              label="Business impact"
+              hint={bi.financial
+                ? "Declared in the inventory."
+                : "Not declared. An application without a level is not a low-impact application."}
+            >
+              <span className="flex flex-wrap items-center gap-1.5">
+                <ImpactChip level={bi.financial} />
+                {bi.financial_raw && !bi.financial ? (
+                  <span className="num text-[11px] text-ink-500">sheet says “{bi.financial_raw}”</span>
+                ) : null}
+              </span>
+            </Field>
+            <Field label="Audience size" hint="Band recorded in the inventory, not a measured user count.">
+              {bi.user_base
+                ? <span className="num">{bi.user_base} users</span>
+                : <TbdValue value={null} />}
+            </Field>
             {/* R5 · tickets are a cost axis, never a risk axis: a single colour. */}
             <Field label="Support load (2024 tickets)" hint="A cost axis. It is not a risk signal and is not coloured as one.">
               {app.tickets_2024 === null
@@ -367,6 +409,9 @@ export default async function AppResolverPage({ params }: { params: Promise<{ ap
             <strong>Which dashboards go down with it.</strong> The Dashboard → Application link has{" "}
             <InlineMetric resolved={meta.dashboard_link.confirmed} universe={meta.dashboard_link.workspaces} />{" "}
             workspaces confirmed. It is out of v1.
+          </li>
+          <li>
+            <strong>Which incidents this application had, by number.</strong> {meta.incident_link.note}
           </li>
           <li>
             <strong>Which group a specific ticket goes to.</strong> Every AG is listed because the model does

@@ -7,7 +7,8 @@ import {
 import type { Application, Criticality } from "@/types";
 import { AiTag, AppLink, CriticalityChip, GateChips, NotRoutableTag, SupportLoad, TbdValue } from "./Chips";
 import { InlineMetric, Metric } from "./Metric";
-import { Note, SectionHeader } from "./SectionHeader";
+import { Note, SectionHeader, TableCaption } from "./SectionHeader";
+import { Trace } from "./Trace";
 
 type SortKey = "name" | "criticality" | "platforms" | "ags" | "tickets" | "process" | "sector";
 const CRIT_ORDER: Record<Criticality, number> = { C1: 0, C2: 1, C3: 2, "C-": 3 };
@@ -66,7 +67,11 @@ export function PortfolioTable({
     <div className="space-y-4">
       {showGaps ? (
         <section className="card card-pad border-ev-e2/40 bg-ev-e2/[0.05]">
-          <SectionHeader kicker="Pinned panel · computed from the data" title="Declared gap" />
+          <SectionHeader kicker="Pinned panel · computed from the data" title="Declared gap">
+            <span className="flex flex-wrap items-center gap-1.5">
+              <Trace measure="M06" /><Trace measure="M07" /><Trace measure="M09" />
+            </span>
+          </SectionHeader>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
             <Metric label="No platform" resolved={gaps.withoutPlatform} universe={gaps.universe} unitLabel="stack unresolved" />
             <Metric label="No Assignment Group" resolved={gaps.withoutAg} universe={gaps.universe} unitLabel="not routable" />

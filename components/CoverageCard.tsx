@@ -1,6 +1,12 @@
 import type { CoverageLink } from "@/types";
 import { EvidenceBadge } from "./EvidenceBadge";
 import { Metric } from "./Metric";
+import { Trace } from "./Trace";
+
+/* Cada eslabon apunta a la metrica del registro que lo define. L1 y L4 no
+   tienen ficha propia en 08_MEASURES y por eso no llevan boton: se declara
+   por omision en lugar de apuntar a una ficha que no les corresponde. */
+const MEASURE_OF: Record<string, string> = { L2: "M07", L3: "M06" };
 
 /** One link: resolved over universe, percentage, the owner who can unblock it
  *  and its evidence tier. When it mixes authorities, it breaks them out. */
@@ -9,9 +15,10 @@ export function CoverageCard({ link }: { link: CoverageLink }) {
   const low = link.evidence_tier.includes("E3");
   return (
     <div className="card card-pad flex flex-col gap-3">
-      <div className="flex items-start gap-1.5">
+      <div className="flex flex-wrap items-start gap-1.5">
         <span className="num rounded bg-pep-900 px-1.5 py-0.5 text-[11px] font-bold text-white">{link.id}</span>
         <EvidenceBadge tier={link.evidence_tier} showAuthority />
+        {MEASURE_OF[link.id] ? <Trace measure={MEASURE_OF[link.id]} /> : null}
       </div>
       <h3 className="text-sm font-semibold text-ink-900">{link.link}</h3>
 

@@ -3,7 +3,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const LINKS = [
-  { href: "/", label: "Portfolio Health" },
+  { href: "/", label: "Overview" },
+  { href: "/portfolio", label: "Portfolio Health" },
+  { href: "/sectors", label: "Sectors" },
   { href: "/blast-radius", label: "Blast Radius" },
   { href: "/graph", label: "Relationships" },
   { href: "/quality", label: "Work Notes Quality" },

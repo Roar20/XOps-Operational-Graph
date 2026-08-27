@@ -72,6 +72,10 @@ repositorio y ningún módulo de la aplicación lee del generador en tiempo de e
 | Claves de AG unidas al corpus | 79 de 265 |
 | Series temporales: semanas · meses · trimestres · años | 138 · 33 · 12 · 4 |
 | Enlaces plataforma–aplicación (unidad del Sankey) | 468 sobre 240 aplicaciones distintas · sobrecuenta 228 |
+| Sectores reconocidos · pares aplicación–sector | 11 · 816 sobre 305 aplicaciones |
+| Aplicaciones en más de un sector | 118 |
+| Impacto de negocio declarado | 100 de 504 · Critical 5 · High 4 · Medium 14 · Low 77 |
+| Cruce impacto × ruta (partición) | 100 / 0 / 212 / 192 = 504 |
 
 ### Diferencias contra las cifras esperadas en la especificación
 
@@ -96,6 +100,11 @@ AI/ML (142 · 52 · 81 · 32) sí coinciden. La brecha en conteos de AG es consi
 - **DQ1** — claves de AG duplicadas: 268 nombres colapsan a 265 claves normalizadas.
   Por eso el denominador de "claves unidas al corpus" es 265 y no 268.
 - **DQ2** — hueco entre el `ag_count` declarado por el inventario y el conteo real del puente.
+- **DQ4** — **73 aplicaciones traen un ID de servicio de ServiceNow** (`SNSVC…`, `BSN…`) dentro de la
+  columna de sector. No son sectores, así que quedan en cuarentena declarada: la aplicación conserva
+  los sectores reales que además declare, y el token se muestra en su ficha y en `/sectors`. La misma
+  columna mezcla separadores (coma y punto y coma) y caja (`Global` / `GLOBAL`); ambos se normalizan, y
+  esa normalización es una derivación, no dato de origen.
 - **DQ3** — la hoja escribe el mismo no-valor de tres maneras: `TBD`, `Por confirmar` y
   `not stated`. La interfaz trata las tres como no resuelto, por lo que **30 aplicaciones** que
   antes mostraban un proceso o un sector aparente ahora muestran TBD. La compuerta *Atribuible*
@@ -142,12 +151,103 @@ Node-link en **SVG plano, sin librería de layout ni dependencia nueva**:
   dice cuántos quedaron fuera. `POWER_BI` tiene 129 aplicaciones; el grafo nunca finge que la
   vecindad es más pequeña de lo que es.
 
+## Capa de negocio y trazabilidad
+
+### `/` Overview — la primera aproximación
+
+La pantalla de entrada no agrega ninguna cifra nueva: usa exactamente las mismas funciones de
+`lib/data.ts` que las pantallas técnicas. Lo que cambia es el orden, el vocabulario y la profundidad.
+
+- **Tres preguntas, una por tarjeta**, en el idioma del negocio: *¿el ticket llega a un equipo?*,
+  *¿hay alguien responsable?*, *¿sabemos cuánto costaría?* Cada una con su denominador y un botón que
+  abre la trazabilidad.
+- **Divulgación progresiva.** La respuesta arriba, la evidencia a un clic, el detalle técnico en otra
+  pantalla. Ninguna tarjeta obliga a leer el modelo para entender la cifra.
+- **Glosario de las cinco palabras** que el modelo usa y que no son obvias fuera del equipo:
+  *business application*, *assignment group*, *DPM*, *blast radius*, *evidence tier*.
+- **Límites declarados en lenguaje llano**, no en nota al pie: qué no se puede responder y por qué.
+
+### Trazabilidad · `<Trace measure="M07" />`
+
+`08_MEASURES` es un registro de 16 métricas con fórmula de negocio, denominador declarado, cobertura,
+nivel de evidencia, estado y nota. Estaba en el JSON desde el principio y no se mostraba. Ahora cada
+cifra publicada lleva un botón con su `measure_id` que abre la ficha completa:
+
+- Qué cuenta, en fórmula de negocio, y contra qué denominador.
+- Nivel de evidencia y **estado**: `Provisional` significa calculado y reproducible pero **no
+  certificado** — la certificación es un acto de gobierno, no del modelo, y nada aquí la reclama.
+  `Blocked` significa que el modelo todavía no puede calcularla, y se publica bloqueada en lugar de
+  estimarse.
+- **El valor que esta aplicación calcula junto al que la hoja escribió.** Cuando difieren se muestran
+  los dos y se marca la divergencia: reconciliarlos en silencio borraría justo la trazabilidad que la
+  ficha existe para dar. Ejemplo real: la hoja registra `0.0%` para M07; la aplicación calcula
+  312 de 504 · 61.9% desde las filas.
+- La hoja de origen, el script que la proyecta y la fecha de corte.
+
+Cuando una cifra **no** tiene ficha en el registro —el impacto de negocio, que es columna del
+inventario y no métrica calculada— no se le cuelga una ficha ajena: se declara su origen en texto.
+
+### Sectores
+
+El sector pasa de ser una cadena de texto a una dimensión N:M de pleno derecho, con puente
+aplicación–sector, igual que plataforma y assignment group (R2):
+
+- **118 aplicaciones pertenecen a más de un sector**, así que los conteos por sector **no se suman**:
+  816 pares sobre 305 aplicaciones. Es la misma regla del blast radius y la pantalla la declara antes
+  de mostrar la tabla.
+- **199 aplicaciones no aparecen en ninguna fila de sector** (celda vacía, `TBD`, `not stated`, o sólo
+  un token no reconocido). No se reparten entre sectores ni se descartan: se listan aparte.
+- La normalización de separadores y de caja es una derivación declarada, marcada **E3**.
+
+### Impacto de negocio
+
+Se lee de `financial_impact` del inventario, con los marcadores de la hoja (`TBD, ARA Not Started`,
+`Empty`) convertidos a *no declarado*:
+
+| | |
+|---|---|
+| Critical | 5 |
+| High | 4 |
+| Medium | 14 |
+| Low | 77 |
+| **No declarado** | **404** |
+
+La pantalla dice explícitamente **«no leer esto como que la mayoría del portafolio es de bajo
+impacto»**: 404 aplicaciones no traen nivel, y ausencia no es `Low`.
+
+El cruce que importa es **impacto × ruta**, publicado como partición completa (las cuatro celdas suman
+504, así que nada se cuenta dos veces ni se queda fuera):
+
+| | Puede rutearse | Sin ruta |
+|---|---|---|
+| **Impacto declarado** | 100 | **0** |
+| **Sin impacto declarado** | 212 | **192** |
+
+El hallazgo: **las 192 aplicaciones sin grupo de soporte tampoco tienen impacto de negocio declarado.**
+La celda tranquilizadora (impacto declarado y sin ruta = 0) está vacía porque el impacto sólo se declara
+en 100 de 504, no porque la exposición se haya revisado y esté limpia. La pantalla lo dice con esas
+palabras.
+
+### Número de incidente — declarado como ausente
+
+La capa semántica **no trae grano de incidente**. El corpus llega ya agregado por grupo, periodo,
+código del Decálogo y patrón recurrente, así que **ningún número de incidente alcanza este modelo**.
+En lugar de fabricar uno:
+
+- `meta.incident_link` declara el corpus de origen, el grano publicado, el grano que falta, la ruta de
+  unión (`Incident → Assignment Group → bridge 05 → Business Application`) y qué queda bloqueado
+  mientras tanto.
+- `types/index.ts` ya tipa `IncidentRow` con `incident_number`, y `GraphData.incidents?` es opcional:
+  el día que se agregue un extracto con grano de incidente, las pantallas lo absorben sin rehacerse.
+- Mientras tanto la interfaz publica **conteos** de incidentes con su denominador, nunca un
+  identificador de ticket. `/quality` lo declara en su propio panel.
+
 ## Stack
 
 - Next.js 15 (App Router) + TypeScript, desplegable en Vercel sin configuración adicional.
 - **Sin backend, sin base de datos, sin autenticación, sin variables de entorno.** Un único
   JSON importado estáticamente. Las 504 fichas de aplicación se prerenderizan en build
-  (512 rutas estáticas en total).
+  (514 rutas estáticas en total).
 - Tailwind, sin librería de componentes.
 - Recharts, sólo donde una tabla no basta: serie de calidad, comparativo de cobertura AI/ML,
   distribución del Decálogo y el Sankey de flujo.
@@ -168,7 +268,9 @@ npm run verify      # criterios de aceptación contra la app corriendo
 
 | Ruta | Pantalla |
 |---|---|
-| `/` | Portfolio Health — 4 eslabones de cobertura, tabla filtrable de 504 apps, panel fijo de hueco declarado |
+| `/` | **Overview** — capa de entrada para negocio: tres preguntas en lenguaje llano, impacto de negocio, sectores, costo de soporte, límites declarados y glosario |
+| `/portfolio` | Portfolio Health — 4 eslabones de cobertura, tabla filtrable de 504 apps, panel fijo de hueco declarado |
+| `/sectors` | Sectors — la dimensión de sector completa, con su regla de no aditividad y la cuarentena DQ4 |
 | `/blast-radius` | Blast Radius — selector multi-plataforma, unión deduplicada, procesos afectados, ruta de respuesta |
 | `/graph` | Relationships — Sankey de flujo Plataforma → Proceso → Ruta de respuesta, y grafo de vecindad de cualquier nodo |
 | `/app/[app_id]` | Application Resolver — identidad, atribución, propiedad, operación con **todos** los Assignment Groups |
@@ -225,14 +327,19 @@ npm i -D playwright --no-save     # sólo para verificar; no es dependencia del 
 npm run verify
 ```
 
-Estado al último corte: **36/36**.
+Estado al último corte: **46/46**.
 
 Entre lo que comprueba: que la unión deduplicada aparezca y la suma sólo tachada; que no
-exista un porcentaje sin denominador en ninguna de las seis rutas; que un delta negativo
+exista un porcentaje sin denominador en ninguna de las ocho rutas; que un delta negativo
 con `down_is_good` se pinte **verde**; que las aplicaciones sin ruta sigan publicadas; que
-la fecha de corte y el panel de reglas estén en las seis pantallas; que el Sankey declare su
+la fecha de corte y el panel de reglas estén en las ocho pantallas; que el Sankey declare su
 unidad y su sobrecuenta y nombre las plataformas que dejó fuera; que el grafo distinga las
-aristas E3 de las E2; y que los ganchos de la sección 7 sigan en el contrato.
+aristas E3 de las E2; que el Overview publique las tres respuestas con denominador y diga que
+los niveles de impacto no suman el portafolio; que el cruce impacto × ruta sea una partición
+que suma 504; que los tokens de ServiceNow en la columna de sector aparezcan listados; que la
+ausencia del número de incidente esté declarada; que la ficha de trazabilidad traiga fórmula,
+denominador, hoja de origen y el valor vivo junto al de la hoja; y que los ganchos de la
+sección 7 sigan en el contrato.
 
 ## Paleta
 
@@ -247,7 +354,7 @@ serie de referencia `#8496A8`, no los azules más pálidos de la paleta de inter
 ## Despliegue
 
 Vercel, preset Next.js, sin variables de entorno y sin secretos. `npm run build` produce
-512 rutas estáticas.
+514 rutas estáticas.
 
 **Tamaño, medido y no estimado.** El JSON pesa 692 KB en disco y **sí viaja al navegador**:
 las tres pantallas interactivas (blast radius, calidad, AI Ops) recalculan uniones,

@@ -1,7 +1,7 @@
 import raw from "@/data/xops-operational-graph-data.json";
 import type {
   Application, AssignmentGroup, CoverageLink, Criticality, GraphData,
-  Granularity, Platform, QualityAgRow, Workspace, EvidenceTier,
+  Granularity, Platform, QualityAgRow, Workspace, EvidenceTier, Sector, Measure,
 } from "@/types";
 
 export const graph = raw as unknown as GraphData;
@@ -12,8 +12,9 @@ export const platforms: Platform[] = graph.platforms;
 export const assignmentGroups: AssignmentGroup[] = graph.assignment_groups;
 export const coverage: CoverageLink[] = graph.coverage;
 export const quality = graph.quality;
-export const measures = graph.measures;
 export const workspaces: Workspace[] = graph.workspaces;
+export const sectors: Sector[] = graph.sectors;
+export const measures: Measure[] = graph.measures;
 
 /** Extension seccion 7. Ausente en v1; el codigo no asume su presencia. */
 export const consumption = graph.consumption ?? null;
@@ -560,3 +561,173 @@ export function neighbourhood(kind: FocusKind, key: string): Neighbourhood | nul
 /** Catalogos para el selector del explorador. */
 export const AG_OPTIONS = [...assignmentGroups]
   .sort((a, b) => b.app_count - a.app_count || a.name.localeCompare(b.name));
+
+/* ------------------------------------------------------------------ */
+/* Sector · dimension de negocio, N:M igual que plataforma y AG        */
+/* ------------------------------------------------------------------ */
+export const getSector = (name: string) => sectorByName.get(name);
+const sectorByName = new Map(sectors.map((x) => [x.name, x]));
+
+/** Aplicaciones sin ningun sector reconocido. No se reparten ni se imputan. */
+export const appsWithoutSector = applications.filter((a) => a.sectors.length === 0);
+/** Aplicaciones cuya columna de sector traia un ID de servicio de ServiceNow. */
+export const appsWithBadSectorToken = applications.filter((a) => a.sector_unrecognized.length > 0);
+export const multiSectorApps = applications.filter((a) => a.sectors.length > 1).length;
+
+/** Union deduplicada de aplicaciones para un conjunto de sectores.
+ *  R4 vale igual aqui: 118 aplicaciones estan en mas de un sector, asi que
+ *  sumar los conteos por sector cuenta esas aplicaciones varias veces. */
+export function computeSectorReach(sectorNames: string[]) {
+  const selected = sectorNames.map(getSector).filter(Boolean) as Sector[];
+  const ids = new Set<string>();
+  for (const x of selected) for (const id of x.app_ids) ids.add(id);
+  const apps = [...ids].map((id) => byId.get(id)).filter(Boolean) as Application[];
+  const naiveSum = selected.reduce((n, x) => n + x.apps, 0);
+  return {
+    selected,
+    apps,
+    unionCount: apps.length,
+    naiveSum,
+    overcount: naiveSum - apps.length,
+    routable: apps.filter((a) => a.gates.routable).length,
+    owned: apps.filter((a) => a.gates.owned).length,
+    platformKnown: apps.filter((a) => a.gates.platform_known).length,
+    impactDeclared: apps.filter((a) => a.business_impact.financial !== null).length,
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* Impacto de negocio · solo lo declarado, nunca imputado              */
+/* ------------------------------------------------------------------ */
+export const IMPACT_ORDER = ["Critical", "High", "Medium", "Low"] as const;
+export type ImpactLevel = (typeof IMPACT_ORDER)[number];
+
+export interface ImpactProfile {
+  universe: number;
+  /** Conteo por nivel declarado. La suma NUNCA es el universo. */
+  byLevel: Record<ImpactLevel, number>;
+  declared: number;
+  notDeclared: number;
+  /** Aplicaciones con marcador de la hoja ("TBD, ARA Not Started", "Empty"). */
+  placeholder: number;
+  userBaseDeclared: number;
+  serviceTierDeclared: number;
+  supportWindowDeclared: number;
+  /** Apps con impacto alto o critico Y sin ruta de respuesta. El cruce que importa. */
+  highImpactNoRoute: Application[];
+  highImpactNoOwner: Application[];
+}
+
+export function impactProfile(pool: Application[] = applications): ImpactProfile {
+  const byLevel = { Critical: 0, High: 0, Medium: 0, Low: 0 } as Record<ImpactLevel, number>;
+  let declared = 0, placeholder = 0;
+  for (const a of pool) {
+    const lvl = a.business_impact.financial;
+    if (lvl) { byLevel[lvl] += 1; declared += 1; }
+    else if (a.business_impact.financial_raw) placeholder += 1;
+  }
+  const high = pool.filter((a) => a.business_impact.financial === "High"
+    || a.business_impact.financial === "Critical");
+  return {
+    universe: pool.length,
+    byLevel,
+    declared,
+    notDeclared: pool.length - declared,
+    placeholder,
+    userBaseDeclared: pool.filter((a) => a.business_impact.user_base).length,
+    serviceTierDeclared: pool.filter((a) => a.business_impact.service_tier).length,
+    supportWindowDeclared: pool.filter((a) => a.business_impact.support_window).length,
+    highImpactNoRoute: high.filter((a) => !a.gates.routable),
+    highImpactNoOwner: high.filter((a) => !a.gates.owned),
+  };
+}
+
+/** Bandas de tamano de audiencia, en el orden de la hoja. ">100" se conserva
+ *  aparte porque se solapa con otras bandas y mapearla seria inventar. */
+export const USER_BANDS = ["0-5", "6-49", "50-99", "100-499", "500-999", "1000+", ">100"];
+
+/* ------------------------------------------------------------------ */
+/* Trazabilidad · cada cifra publicada apunta a su ficha de metrica    */
+/*                                                                     */
+/* El valor vivo lo calcula esta aplicacion; la hoja escribio el suyo  */
+/* en la nota de 08_MEASURES. Cuando difieren se muestran los dos y se */
+/* marca la divergencia, porque reconciliarlos en silencio borraria    */
+/* justamente la trazabilidad que la ficha existe para dar.            */
+/* ------------------------------------------------------------------ */
+export const measureById = new Map(measures.map((m) => [m.measure_id, m]));
+
+export interface LiveValue {
+  label: string;
+  resolved: number;
+  universe: number;
+  /** Cifra que la hoja escribio en su nota, si la escribio. */
+  sheetClaim?: string;
+}
+
+const gaps0 = computeGaps();
+
+/** Valor que ESTA aplicacion calcula para cada binding del registro. */
+export const LIVE: Record<string, LiveValue> = {
+  "gate.attributable": {
+    label: "Applications with a declared process and sector",
+    resolved: gaps0.attributable, universe: gaps0.universe, sheetClaim: "0.0%",
+  },
+  "gate.routable": {
+    label: "Applications with at least one Assignment Group",
+    resolved: gaps0.routable, universe: gaps0.universe, sheetClaim: "0.0%",
+  },
+  "gap.metadata": {
+    label: "Applications with no platform or no Assignment Group",
+    resolved: applications.filter((a) => !a.gates.platform_known || !a.gates.routable).length,
+    universe: gaps0.universe, sheetClaim: "0 signals",
+  },
+  "platform.blast_radius_direct": {
+    label: "Application–platform pairs in the bridge",
+    resolved: applications.reduce((n, a) => n + a.platforms.length, 0),
+    universe: platforms.reduce((n, p) => n + p.blast_radius_direct, 0),
+    sheetClaim: "141 pairs · 91 apps",
+  },
+  "dashboard.confirmed": {
+    label: "Workspaces with a confirmed application",
+    resolved: meta.dashboard_link.confirmed, universe: meta.dashboard_link.workspaces,
+    sheetClaim: "0.0% workspaces confirmed",
+  },
+  "quality.diagnostic_rate": {
+    label: "Eligible incidents behind the diagnostic rate",
+    resolved: quality.meta.eligible, universe: quality.meta.universe_raw,
+    sheetClaim: "Baseline 51.6% · current 68.4%",
+  },
+};
+
+export function liveFor(measureId: string): LiveValue | null {
+  const m = measureById.get(measureId);
+  return m?.binding ? LIVE[m.binding] ?? null : null;
+}
+
+/** Cruce impacto declarado x ruta declarada. Es la pregunta de negocio del
+ *  tablero: cuanto del hueco de ruteo se puede cuantificar. Se calcula como
+ *  particion completa, de modo que las cuatro celdas suman el universo. */
+export interface ImpactRouteCrossing {
+  universe: number;
+  impactAndRoute: Application[];
+  impactNoRoute: Application[];
+  noImpactWithRoute: Application[];
+  noImpactNoRoute: Application[];
+  /** Suma de las cuatro celdas. Debe ser igual al universo. */
+  total: number;
+}
+
+export function impactRouteCrossing(pool: Application[] = applications): ImpactRouteCrossing {
+  const has = (a: Application) => a.business_impact.financial !== null;
+  const cells = {
+    impactAndRoute: pool.filter((a) => has(a) && a.gates.routable),
+    impactNoRoute: pool.filter((a) => has(a) && !a.gates.routable),
+    noImpactWithRoute: pool.filter((a) => !has(a) && a.gates.routable),
+    noImpactNoRoute: pool.filter((a) => !has(a) && !a.gates.routable),
+  };
+  return {
+    universe: pool.length,
+    ...cells,
+    total: Object.values(cells).reduce((n, c) => n + c.length, 0),
+  };
+}

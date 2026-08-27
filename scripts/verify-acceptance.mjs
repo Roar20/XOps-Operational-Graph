@@ -33,11 +33,25 @@ const rawApp = APPS.find((a) => a.technology_raw && a.platforms.length > 0);
 const noCrit = APPS.filter((a) => a.criticality === "C-").length;
 const aiApps = APPS.filter((a) => a.is_ai_ml);
 const aiRoutable = aiApps.filter((a) => a.gates.routable).length;
+const IMPACT = ["Critical", "High", "Medium", "Low"];
+const impactBy = Object.fromEntries(IMPACT.map((k) =>
+  [k, APPS.filter((a) => a.business_impact.financial === k).length]));
+const impactDeclared = IMPACT.reduce((n, k) => n + impactBy[k], 0);
+const sectorPairs = APPS.reduce((n, a) => n + a.sectors.length, 0);
+const appsWithSector = APPS.filter((a) => a.sectors.length > 0).length;
+const badSector = APPS.filter((a) => a.sector_unrecognized.length > 0);
+const crossing = {
+  ir: APPS.filter((a) => a.business_impact.financial && a.gates.routable).length,
+  inr: APPS.filter((a) => a.business_impact.financial && !a.gates.routable).length,
+  nir: APPS.filter((a) => !a.business_impact.financial && a.gates.routable).length,
+  nnr: APPS.filter((a) => !a.business_impact.financial && !a.gates.routable).length,
+};
 const GRAN = Object.fromEntries(Object.entries(D.quality.timeseries).map(([k, v]) => [k, v.length]));
 const diagDelta = D.quality.baseline_metrics.find((m) => m.key === "diagnostic_rate");
 const poorDelta = D.quality.baseline_metrics.find((m) => m.key === "poor_critical_rate");
 
-const ROUTES = ["/", "/blast-radius", "/graph", "/quality", "/ai-ops", `/app/${noAg[0].app_id}`];
+const ROUTES = ["/", "/portfolio", "/sectors", "/blast-radius", "/graph", "/quality", "/ai-ops",
+  `/app/${noAg[0].app_id}`];
 
 const B = process.env.BASE ?? "http://localhost:3100";
 const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
@@ -138,7 +152,7 @@ ok("C8b evidence tier declared on the platform link",
   new RegExp(`\\b${rawApp.platform_evidence_tier}\\b`).test(t));
 
 /* C9 · undeclared criticality is shown, never imputed */
-await go("/", 1300);
+await go("/portfolio", 1300);
 t = flat(await txt());
 ok(`C9 the ${noCrit} applications with no criticality are declared as Not declared`,
   t.includes("Not declared") && t.includes(n(noCrit)), `expected ${noCrit}`);
@@ -218,6 +232,61 @@ for (const r of ROUTES) {
 }
 ok("R3b no bare percentage without a denominator on any route",
   bareAll.length === 0, bareAll.slice(0, 3).join(" | "));
+
+/* ---------------- business layer, sectors, impact, traceability ---------------- */
+await go("/", 1500);
+t = flat(await txt());
+
+/* La capa de entrada responde las tres preguntas con denominador (R3). */
+ok("B1 the overview answers routing, ownership and business impact with denominators",
+  t.includes(`${APPS.filter((a) => a.gates.routable).length} of ${D.meta.universe_apps}`)
+  && t.includes(`${APPS.filter((a) => a.gates.owned).length} of ${D.meta.universe_apps}`)
+  && t.includes(`${impactDeclared} of ${D.meta.universe_apps}`));
+
+/* El error de lectura que esta pantalla existe para evitar: ausencia != Low. */
+ok("B2 business impact declares that the levels do not add up to the portfolio",
+  IMPACT.every((k) => t.includes(n(impactBy[k])))
+  && /never as Low/i.test(t) && /not declared/i.test(t));
+
+/* El cruce es una particion: las cuatro celdas suman el universo. */
+ok("B3 the impact x route crossing is a partition that adds to the universe",
+  crossing.ir + crossing.inr + crossing.nir + crossing.nnr === D.meta.universe_apps
+  && t.includes(n(crossing.nnr)) && t.includes(n(crossing.nir)),
+  `${crossing.ir}/${crossing.inr}/${crossing.nir}/${crossing.nnr}`);
+
+/* Sector es N:M y la pantalla lo dice antes de mostrar la tabla. */
+ok("B4 sectors are declared non-additive",
+  /cannot be added together/i.test(t) && t.includes(n(D.sectors.length)));
+
+await go("/sectors", 1400);
+t = flat(await txt());
+ok("B5 the sector page publishes pairs and applications as different figures",
+  t.includes(n(sectorPairs)) && t.includes(`${appsWithSector} of ${D.meta.universe_apps}`),
+  `${sectorPairs} pairs · ${appsWithSector} apps`);
+ok("B6 the ServiceNow tokens found in the sector column are listed, not cleaned away",
+  badSector.length > 0 && t.includes(badSector[0].sector_unrecognized[0]));
+ok("B7 applications with no recognised sector are declared, not distributed",
+  new RegExp(`${D.meta.universe_apps - appsWithSector} of ${D.meta.universe_apps}`).test(t));
+
+/* El numero de incidente no existe en el modelo y se declara donde importa. */
+await go("/quality", 1600);
+t = flat(await txt());
+ok("B8 the absence of an incident number is declared on the quality screen",
+  /no incident number in this model/i.test(t)
+  && t.includes(D.meta.incident_link.join_path));
+
+/* Trazabilidad: la ficha abre y trae formula, denominador y hoja de origen. */
+await go("/portfolio", 1500);
+await p.getByRole("button", { name: /Traceability for Routing coverage/i }).first().click();
+await p.waitForTimeout(600);
+t = flat(await txt());
+const m07 = D.measures.find((m) => m.measure_id === "M07");
+ok("B9 the traceability card carries formula, declared denominator, tier, status and source sheet",
+  t.includes(m07.formula) && t.includes(m07.denominator) && t.includes(m07.status)
+  && t.includes(m07.source_sheet) && t.includes(D.meta.source_file));
+ok("B10 the traceability card shows the live value next to the sheet's own claim",
+  t.includes(`${APPS.filter((a) => a.gates.routable).length} of ${D.meta.universe_apps}`)
+  && /sheet records/i.test(t));
 
 /* ---------------- graph and Sankey ---------------- */
 await go("/graph", 1800);

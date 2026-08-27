@@ -10,6 +10,7 @@ import { Note, SectionHeader, TableCaption } from "@/components/SectionHeader";
 import { EvidenceBadge } from "@/components/EvidenceBadge";
 import { ApproxTag } from "@/components/Chips";
 import { QualitySeries, DecalogueChart } from "@/components/QualityCharts";
+import { Trace } from "@/components/Trace";
 
 /* Readable name and unit for each metric. There is a single canonical scorer,
    QN v2.4.2. Nothing on this screen mixes instruments. */
@@ -79,7 +80,10 @@ export function QualityModule() {
       {/* ---------- R6 · la elegibilidad es parte de la metrica ---------- */}
       <section className="card card-pad">
         <SectionHeader kicker="R6 · denominator" title="Corpus and eligibility rule">
-          <EvidenceBadge tier="E3" showAuthority />
+          <span className="flex items-center gap-2">
+            <Trace measure="M11" />
+            <EvidenceBadge tier="E3" showAuthority />
+          </span>
         </SectionHeader>
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           <Metric
@@ -131,6 +135,36 @@ export function QualityModule() {
             <ApproxTag /> and it is labelled that way on every other screen.
           </Note>
         </div>
+      </section>
+
+      {/* ---------- grano de incidente: se declara lo que no llega ---------- */}
+      <section className="card card-pad border-ev-e2/40 bg-ev-e2/[0.05]">
+        <SectionHeader kicker="Declared limit" title="There is no incident number in this model" />
+        <p className="text-sm leading-relaxed text-ink-700">{meta.incident_link.note}</p>
+        <div className="mt-3 grid gap-4 sm:grid-cols-2">
+          <div>
+            <div className="label">What the corpus publishes</div>
+            <p className="mt-0.5 text-sm text-ink-800">{meta.incident_link.grain_published}</p>
+          </div>
+          <div>
+            <div className="label">What is missing</div>
+            <p className="mt-0.5 text-sm text-ink-800">{meta.incident_link.grain_missing}</p>
+          </div>
+        </div>
+        <div className="mt-3">
+          <div className="label">Join path once that extract exists</div>
+          <p className="num mt-0.5 text-sm text-ink-800">{meta.incident_link.join_path}</p>
+        </div>
+        <div className="mt-3">
+          <div className="label">What stays blocked until then</div>
+          <ul className="mt-1 list-disc space-y-0.5 pl-5 text-sm text-ink-700">
+            {meta.incident_link.blocks.map((b) => <li key={b}>{b}</li>)}
+          </ul>
+        </div>
+        <p className="subtle mt-3">
+          Until then every figure on this screen is an incident <strong>count</strong> with its denominator,
+          and never a ticket identifier. Source corpus: <span className="num">{meta.incident_link.corpus}</span>.
+        </p>
       </section>
 
       {/* ---------- R7 · un solo instrumento, y el desacuerdo declarado ---------- */}

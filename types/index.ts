@@ -40,6 +40,11 @@ export interface Application {
   dpm_l3: string;
   owner: string;
   tech_lead: string;
+  /** Sectores canonicos. La relacion es N:M: 118 aplicaciones tienen mas de uno. */
+  sectors: string[];
+  /** Tokens de la columna sector que no son sectores. Se declaran, no se borran. */
+  sector_unrecognized: string[];
+  business_impact: BusinessImpact;
   /** Nombres de plataforma. La relacion es N:M y se resuelve por puente. */
   platforms: string[];
   platform_evidence_tier: Exclude<EvidenceTier, "E2/E3"> | null;
@@ -52,6 +57,37 @@ export interface Application {
   tickets_2024: number | null;
   gates: Gates;
   has_quality: boolean;
+}
+
+/** Impacto de negocio declarado. null = no declarado; nunca se imputa. */
+export interface BusinessImpact {
+  financial: "Low" | "Medium" | "High" | "Critical" | null;
+  financial_raw: string | null;
+  user_base: string | null;
+  user_base_raw: string | null;
+  service_tier: string | null;
+  support_window: string | null;
+}
+
+export interface Sector {
+  sector_id: string;
+  name: string;
+  app_ids: string[];
+  apps: number;
+  routable: number;
+  owned: number;
+  platform_known: number;
+  attributable: number;
+  ai_ml: number;
+  criticality_mix: Record<Criticality, number>;
+  weighted: number;
+  processes: string[];
+  platforms: string[];
+  ags: string[];
+  dpms: string[];
+  tickets_2024: number;
+  impact_declared: number;
+  impact_high: number;
 }
 
 export interface Platform {
@@ -101,6 +137,7 @@ export interface CoverageLink {
   breakdown?: { evidence_tier: EvidenceTier; resolved: number; source: string }[];
 }
 
+/** Registro de metricas: el respaldo de trazabilidad de cada cifra publicada. */
 export interface Measure {
   measure_id: string;
   name: string;
@@ -112,6 +149,9 @@ export interface Measure {
   evidence_tier: string;
   status: string;
   note: string;
+  /** Clave con la que la interfaz une la ficha al valor que ella calcula. */
+  binding: string | null;
+  source_sheet: string;
 }
 
 /* ------------------------------- calidad de work notes ------------------------------- */
@@ -246,6 +286,26 @@ export interface ConsumptionRow {
   app_id_confirmed: string | null;
 }
 
+/** Fila de incidente. El grano de incidente NO esta en la capa semantica v1:
+ *  el corpus llega agregado por grupo, periodo, codigo y patron. El contrato la
+ *  tipa para que las pantallas la absorban sin rehacerse. */
+export interface IncidentRow {
+  incident_number: string;
+  opened_at: string;
+  closed_at: string | null;
+  assignment_group: string;
+  short_description: string;
+  priority: string | null;
+  state: string;
+  close_code: string | null;
+  has_root_cause: boolean;
+  has_resolution_docs: boolean;
+  total_score: number | null;
+  decalogue_code: string | null;
+  /** Solo si un extracto futuro resuelve el eslabon incidente -> aplicacion. */
+  app_id: string | null;
+}
+
 export interface ModelRule {
   id: string;
   title: string;
@@ -273,6 +333,15 @@ export interface Meta {
   criticality_scale: Record<string, string>;
   derivation_warning: string;
   out_of_scope: string[];
+  incident_link: {
+    available: boolean;
+    corpus: string;
+    grain_published: string;
+    grain_missing: string;
+    join_path: string;
+    note: string;
+    blocks: string[];
+  };
   dashboard_link: {
     workspaces: number;
     dashboards_active: number;
@@ -294,9 +363,12 @@ export interface GraphData {
   applications: Application[];
   platforms: Platform[];
   assignment_groups: AssignmentGroup[];
+  sectors: Sector[];
   measures: Measure[];
   quality: QualityBlock;
   workspaces: Workspace[];
   /** Aparece cuando se captura el eslabon Dashboard -> Aplicacion. */
   consumption?: ConsumptionRow[];
+  /** Aparece cuando se agrega un extracto con grano de incidente. */
+  incidents?: IncidentRow[];
 }

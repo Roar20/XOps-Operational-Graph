@@ -100,6 +100,49 @@ for r in bridge_ag:
          "evidence_tier": s(r["evidence_tier"]), "source": s(r["source"]), "as_of": s(r["as_of"])})
 
 # ------------------------------------------------------------- aplicaciones
+# --------------------------------------------------------------- sectores
+# La hoja guarda el sector como texto multivalor en una sola celda y trae tres
+# problemas: separador inconsistente (coma y punto y coma), variantes de caja
+# ("Global" / "GLOBAL") y IDs de servicio de ServiceNow que se colaron en la
+# columna. Se normaliza lo normalizable y lo demas se pone en cuarentena
+# declarada (DQ4) en lugar de silenciarlo o de contarlo como un sector.
+SECTOR_CANON = {
+    "PFNA": "PFNA", "PBNA": "PBNA", "CGF": "CGF", "EUROPE": "EUROPE",
+    "AMESA": "AMESA", "FLNA": "FLNA", "LATAM": "LATAM", "APAC": "APAC",
+    "QFNA": "QFNA", "PGCS": "PGCS", "GLOBAL": "GLOBAL",
+}
+NON_SECTOR = re.compile(r"^(SNSVC|BSN)\d+$", re.I)
+
+def split_sectors(raw):
+    """Devuelve (sectores canonicos, tokens no reconocidos). Nunca inventa."""
+    txt = (raw or "").strip()
+    if not txt:
+        return [], []
+    parts = [q.strip() for chunk in txt.split(",") for q in chunk.split(";") if q.strip()]
+    good, unknown = [], []
+    for part in parts:
+        up = part.upper()
+        if up in ("TBD", "NOT STATED", "POR CONFIRMAR"):
+            continue
+        if up in SECTOR_CANON:
+            if SECTOR_CANON[up] not in good:
+                good.append(SECTOR_CANON[up])
+        else:
+            unknown.append(part)
+    return good, unknown
+
+sector_quarantine = {}
+
+# Escalas de impacto de negocio. Solo se reconocen los niveles que la hoja
+# declara; todo lo demas queda en null y se cuenta como no declarado.
+IMPACT_LEVEL = {"low": "Low", "medium": "Medium", "high": "High", "critical": "Critical"}
+# El tamano de audiencia viene en bandas de texto. ">100" es una banda distinta
+# de las demas y se conserva tal cual en lugar de mapearla a la mas parecida.
+USER_BAND = {
+    "0-5": "0-5", "6-49": "6-49", "50-99": "50-99", "100-499": "100-499",
+    "500-999": "500-999", "1000+": "1000+", ">100": ">100",
+}
+
 applications = []
 unresolved_ag_names = Counter()
 
@@ -116,6 +159,10 @@ for a in apps_raw:
     for x in ag_names:
         if x not in AG_NAMES:
             unresolved_ag_names[x] += 1
+
+    sec_names, sec_unknown = split_sectors(a["sector"])
+    if sec_unknown:
+        sector_quarantine[app_id] = sec_unknown
 
     bp = plat_pairs.get(app_id, [])
     # R9 / derivation_warning: el eslabon Plataforma -> Aplicacion tiene dos
@@ -134,6 +181,8 @@ for a in apps_raw:
         "scope_status": s(a["scope_status"]),
         "process": confirmed(a["process_bucket"]),
         "sector": confirmed(a["sector"]),
+        "sectors": sec_names,
+        "sector_unrecognized": sec_unknown,
         "program": s(a["program"]),
         "archetype": s(a["archetype"]),
         "criticality": s(a["criticality"]) or "C-",
@@ -143,6 +192,16 @@ for a in apps_raw:
         "support_window": s(a["support_window"]),
         "user_base": s(a["user_base"]),
         "financial_impact": s(a["financial_impact"]),
+        # Impacto de negocio, con los marcadores de la hoja convertidos a null.
+        # "TBD, ARA Not Started" y "Empty" son ausencia declarada, no un nivel.
+        "business_impact": {
+            "financial": IMPACT_LEVEL.get(s(a["financial_impact"]).strip().lower()),
+            "financial_raw": s(a["financial_impact"]) or None,
+            "user_base": USER_BAND.get(s(a["user_base"]).strip()),
+            "user_base_raw": s(a["user_base"]) or None,
+            "service_tier": s(a["service_tier"]) or None,
+            "support_window": s(a["support_window"]) or None,
+        },
         "dpm": confirmed(a["dpm"]),
         "dpm_l3": confirmed(a["dpm_l3"]),
         "owner": confirmed(a["owner"]),
@@ -241,6 +300,46 @@ ag_count_gap = sum(
     1 for a, x in zip(applications, apps_raw)
     if len(a["ags"]) != int(x["ag_count"] or 0)
 )
+
+# ------------------------------------------------------------------- sectores
+# El sector es una dimension de negocio de pleno derecho, no una cadena de texto:
+# 116 aplicaciones pertenecen a mas de uno, asi que la relacion es N:M igual que
+# plataforma y assignment group (R2). Se agrega desde las filas, nunca a mano.
+apps_by_sector = defaultdict(list)
+for a in applications:
+    for sn in a["sectors"]:
+        apps_by_sector[sn].append(a["app_id"])
+
+sectors = []
+for name in sorted(apps_by_sector, key=lambda k: (-len(apps_by_sector[k]), k)):
+    ids = apps_by_sector[name]
+    pool = [by_app[i] for i in ids]
+    mix = {c: sum(1 for x in pool if x["criticality"] == c) for c in ("C1", "C2", "C3", "C-")}
+    sectors.append({
+        "sector_id": f"SEC{len(sectors) + 1:02d}",
+        "name": name,
+        "app_ids": ids,
+        "apps": len(ids),
+        "routable": sum(1 for x in pool if x["gates"]["routable"]),
+        "owned": sum(1 for x in pool if x["gates"]["owned"]),
+        "platform_known": sum(1 for x in pool if x["gates"]["platform_known"]),
+        "attributable": sum(1 for x in pool if x["gates"]["attributable"]),
+        "ai_ml": sum(1 for x in pool if x["is_ai_ml"]),
+        "criticality_mix": mix,
+        "weighted": sum(x["criticality_weight"] for x in pool),
+        "processes": sorted({x["process"] for x in pool if x["process"] not in ("TBD", "Por confirmar")}),
+        "platforms": sorted({pn for x in pool for pn in x["platforms"]}),
+        "ags": sorted({g for x in pool for g in x["ags"]}),
+        "dpms": sorted({x["dpm"] for x in pool if x["dpm"] not in ("TBD",)}),
+        "tickets_2024": sum(x["tickets_2024"] or 0 for x in pool),
+        # Impacto de negocio declarado dentro del sector, con su propio hueco.
+        "impact_declared": sum(1 for x in pool if x["business_impact"]["financial"]),
+        "impact_high": sum(1 for x in pool
+                           if x["business_impact"]["financial"] in ("High", "Critical")),
+    })
+
+# Aplicaciones sin ningun sector reconocido. No se reparten ni se imputan.
+apps_without_sector = [a["app_id"] for a in applications if not a["sectors"]]
 
 # ------------------------------------------------------------------ cobertura
 # La interfaz se publica en ingles. Las etiquetas narrativas de la hoja vienen en
@@ -443,12 +542,88 @@ confirmed_ws = sum(1 for w in workspaces if w["application_name_confirmed"])
 top30 = sorted(workspaces, key=lambda w: w["views_6m"] or 0, reverse=True)[:30]
 total_views = sum(w["views_6m"] or 0 for w in workspaces) or 1
 
-measures = [{
-    "measure_id": s(m["measure_id"]), "name": s(m["measure_name"]), "layer": s(m["layer"]),
-    "grain": s(m["grain"]), "formula": s(m["formula_negocio"]),
-    "denominator": s(m["denominador_declarado"]), "coverage": s(m["cobertura_actual"]),
-    "evidence_tier": s(m["evidence_tier"]), "status": s(m["estado"]), "note": s(m["nota"]),
-} for m in rows("08_MEASURES")]
+# ------------------------------------------------------- registro de metricas
+# 08_MEASURES es el respaldo de trazabilidad: por cada metrica trae formula de
+# negocio, denominador declarado, cobertura, nivel de evidencia y estado. Se
+# traduce con diccionarios explicitos y se le agrega `binding`, que es la clave
+# con la que la interfaz une la ficha con el valor que ella misma calcula. Las
+# cifras que la hoja escribio en su nota se conservan tal cual: cuando difieren
+# del valor calculado, la interfaz muestra las dos y marca la divergencia.
+MEASURE_EN = {
+    "M01": ("Direct blast radius", "Distinct applications linked to the platform in 04_BRIDGE_APP_PLATFORM",
+            "91 apps with a declared platform", "141 pairs \u00b7 91 apps",
+            "Not additive across platforms: 8 apps run on Teradata and SAP BW at the same time",
+            "platform.blast_radius_direct"),
+    "M02": ("Union blast radius", "Distinct applications in the union of the set, deduplicated",
+            "91 apps with a declared platform", "n/a until unblocked",
+            "Teradata + SAP BW = 43 deduplicated apps, not 51", "blast.union"),
+    "M03": ("Weighted blast radius", "Sum over apps of (criticality weight x audience weight). BC1=5 BC2=3 BC3=1",
+            "Apps with a platform AND a resolved audience", "n/a until unblocked",
+            "Requires M04. Unblocked by capturing the 30 workspaces", "blast.weighted"),
+    "M04": ("Audience reach", "Unique users of the dashboards linked to the application",
+            "838 active dashboards", "0.0% workspaces confirmed",
+            "Requires application_name_CONFIRMED in 06", "dashboard.confirmed"),
+    "M05": ("Ticket intensity", "Tickets per year divided by the applications of the platform",
+            "Feb-2026 corpus, 132 apps", "n/a until unblocked",
+            "COST AXIS, NOT A RISK AXIS. BC3 generates 11,167 tickets and BC1 only 563", "tickets.total"),
+    "M06": ("Attribution coverage", "Applications with a declared process and sector over the universe",
+            "504 applications", "0.0%", "Gate 1 of 3: Attributable", "gate.attributable"),
+    "M07": ("Routing coverage", "Applications with at least one declared Assignment Group",
+            "504 applications", "0.0%",
+            "Gate 2 of 3: Routable. The source is a spreadsheet, not CMDB", "gate.routable"),
+    "M08": ("Processes affected", "Distinct process buckets reached by the platform",
+            "8 process buckets", "n/a until unblocked",
+            "Translates technical failure into business function", "blast.processes"),
+    "M09": ("Metadata debt", "Applications with no platform or no declared AG",
+            "504 applications", "0 signals",
+            "A progress metric, not a failure metric. It is published and tracked", "gap.metadata"),
+    "M10": ("Concentration index", "Deduplicated union of the two largest platforms over the universe",
+            "132 apps in the platform analysis", "n/a until unblocked", "43 of 132 = 32.6%",
+            "blast.concentration"),
+    "M11": ("Diagnostic rate", "Incidents with compliance_class DIAGNOSTICO over eligible incidents",
+            "242,706 eligible", "", "Anchor metric of the module. Baseline 51.6% \u00b7 current 68.4%",
+            "quality.diagnostic_rate"),
+    "M12": ("Root cause rate", "Incidents with Root Cause greater than zero over eligible incidents",
+            "242,706 eligible", "", "Baseline 71.2% \u00b7 current 83.7%", "quality.has_root_rate"),
+    "M13": ("Poor+Critical rate", "Incidents in the Poor or Critical band over eligible incidents",
+            "242,706 eligible", "", "Desired direction is downwards. Baseline 15.8% \u00b7 current 7.3%",
+            "quality.poor_critical_rate"),
+    "M14": ("Average score", "Average Total Score from the QN v2.4.2 scorer", "242,706 eligible", "",
+            "Not comparable against the scorer in incidentes_clasificados.xlsx", "quality.avg_score"),
+    "M15": ("Recurrence concentration", "Incidents of the pattern over the eligible corpus",
+            "240,241 with a close date", "",
+            "513 patterns concentrate 29.7%. The largest is 9,370 incidents from a single validator",
+            "quality.recurrence"),
+    "M16": ("Decalogue coverage", "Incidents with a D code assigned over eligible incidents",
+            "242,706 eligible", "", "23.0%. It bounds assisted RCA to the codes actually covered",
+            "quality.decalogue"),
+}
+LAYER_EN = {"Exposici\u00f3n": "Exposure", "Consumo": "Consumption", "Costo": "Cost",
+            "Gate": "Gate", "Calidad": "Quality", "Recurrencia": "Recurrence"}
+GRAIN_EN = {"Plataforma": "Platform", "Conjunto de plataformas": "Set of platforms",
+            "Aplicaci\u00f3n": "Application", "Portafolio": "Portfolio",
+            "Ventana de tiempo": "Time window", "Patr\u00f3n": "Pattern"}
+STATUS_EN = {"Provisional": "Provisional", "Bloqueada": "Blocked", "Certificada": "Certified"}
+
+measures = []
+for m in rows("08_MEASURES"):
+    mid = s(m["measure_id"])
+    en = MEASURE_EN.get(mid)
+    measures.append({
+        "measure_id": mid,
+        "name": en[0] if en else s(m["measure_name"]),
+        "layer": LAYER_EN.get(s(m["layer"]), s(m["layer"])),
+        "grain": GRAIN_EN.get(s(m["grain"]), s(m["grain"])),
+        "formula": en[1] if en else s(m["formula_negocio"]),
+        "denominator": en[2] if en else s(m["denominador_declarado"]),
+        "coverage": en[3] if en else s(m["cobertura_actual"]),
+        "evidence_tier": s(m["evidence_tier"]),
+        "status": STATUS_EN.get(s(m["estado"]), s(m["estado"])),
+        "note": en[4] if en else s(m["nota"]),
+        # Clave con la que la interfaz une la ficha al valor que ella calcula.
+        "binding": en[5] if en else None,
+        "source_sheet": "08_MEASURES",
+    })
 
 # DQ3 · La hoja usa tres grafias distintas para el mismo no-valor. Se cuentan
 # desde las filas y se declaran; la interfaz las trata a las tres como TBD, pero
@@ -541,6 +716,23 @@ meta = {
                 "resolves very little and fuzzy matching produces subset false positives, so confirmation "
                 "is human by design. While it stays empty, audience impact is not estimated.",
     },
+    # El detalle de incidente NO esta en la capa semantica. El corpus llega ya
+    # agregado por grupo, por periodo, por codigo y por patron. Se declara el
+    # eslabon que falta y su ruta de union en lugar de fabricar un numero.
+    "incident_link": {
+        "available": False,
+        "corpus": "QN_p120826_FULL_2_4_2_RO_270826 \u00b7 User_Detail",
+        "grain_published": "Assignment Group, period, Decalogue code and recurring signature",
+        "grain_missing": "one row per incident, with its incident number",
+        "join_path": "Incident \u2192 Assignment Group \u2192 (bridge 05) \u2192 Business Application",
+        "note": "The upstream corpus is per incident and does carry the incident number, but the "
+                "semantic layer publishes it already aggregated, so no incident number reaches this "
+                "model. Until an incident-grain extract is added, the interface shows incident "
+                "COUNTS with their denominator and never a ticket identifier. The contract already "
+                "types the row that would land, so the screens absorb it without being rebuilt.",
+        "blocks": ["Open a specific ticket from a chart", "Per-application incident history",
+                   "Attributing an incident to one application rather than to its group"],
+    },
     "link_sources": {
         "platform": {
             "E2": "Tech Buckets analysis · Impact_Lineage_Matrix (Feb 2026)",
@@ -566,6 +758,19 @@ meta = {
                       "more than the bridge does. That column is capped at 10 entries, truncates the "
                       "last name mid-string and repeats variants of the same group. The bridge "
                       "05_BRIDGE_APP_AG is the exact source and is what feeds this application.",
+        },
+        {
+            "id": "DQ4",
+            "title": "ServiceNow service IDs sitting in the sector column",
+            "detail": f"{len(sector_quarantine)} applications carry a token such as "
+                      + ", ".join(sorted({v for vals in list(sector_quarantine.values())[:3] for v in vals})[:3])
+                      + " in the sector column. They match the ServiceNow service-ID pattern, not any "
+                        "sector of the business, so they are quarantined instead of being counted as a "
+                        "sector or silently dropped: the application keeps whatever real sectors it also "
+                        "declares, and the unrecognised token is shown on its record. The sector column "
+                        "also mixes separators (comma and semicolon) and letter case (Global / GLOBAL); "
+                        "both are normalized, and that normalization is a derivation, not source data.",
+            "items": [{"ag_key": k, "names": v} for k, v in list(sector_quarantine.items())[:12]],
         },
         {
             "id": "DQ3",
@@ -598,6 +803,7 @@ data = {
     "applications": applications,
     "platforms": platforms,
     "assignment_groups": assignment_groups,
+    "sectors": sectors,
     "measures": measures,
     "quality": quality,
     "workspaces": workspaces,
@@ -630,6 +836,29 @@ checks.append(("app con mas AGs", max(len(a["ags"]) for a in applications), 14))
 checks.append(("apps con mas de un AG", sum(1 for a in applications if len(a["ags"]) > 1), 113))
 checks.append(("nombres de AG fuera del catalogo", len(unresolved_ag_names), 0))
 checks.append(("claves de AG duplicadas", len(duplicate_ag_keys), 3))
+# Sector. Los conteos se comprueban contra el desglose que los explica, no
+# contra una constante suelta: 118 celdas vacias + 8 "not stated" + 73 que solo
+# traian un ID de servicio = 199 aplicaciones sin sector reconocido.
+_PH = {"", "TBD", "POR CONFIRMAR", "NOT STATED"}
+_empty = sum(1 for a in applications if (a["sector"] or "").strip().upper() in _PH)
+_only_bad = sum(1 for a in applications if not a["sectors"] and a["sector_unrecognized"])
+checks.append(("sectores reconocidos", len(sectors), 11))
+checks.append(("apps sin sector reconocido = placeholder + solo token no reconocido",
+               len(apps_without_sector), _empty + _only_bad))
+checks.append(("apps con token de sector no reconocido", len(sector_quarantine), 73))
+# El puente no pierde ni inventa: pares del puente = suma de sectores por app.
+checks.append(("pares aplicacion-sector cuadran con el puente",
+               sum(x["apps"] for x in sectors),
+               sum(len(a["sectors"]) for a in applications)))
+checks.append(("ningun sector reconocido es un ID de servicio",
+               sum(1 for x in sectors if NON_SECTOR.match(x["name"])), 0))
+checks.append(("todo app_id del puente de sector existe",
+               sum(1 for x in sectors for i in x["app_ids"] if i not in by_app), 0))
+checks.append(("apps con impacto financiero declarado",
+               sum(1 for a in applications if a["business_impact"]["financial"]), 100))
+checks.append(("apps con tamano de audiencia declarado",
+               sum(1 for a in applications if a["business_impact"]["user_base"]), 124))
+checks.append(("registro de metricas", len(measures), 16))
 
 fails = 0
 print("VERIFICACION")
