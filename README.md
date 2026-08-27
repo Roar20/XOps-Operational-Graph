@@ -5,6 +5,13 @@ Centro de comando operativo del portafolio BI y AI/ML de PepsiCo. Responde tres 
 
 Corte de datos declarado: **2026-08-21**. Corte del corpus de calidad: **2026-08-12**.
 
+> **La interfaz está en inglés.** Toda la prosa que se proyecta —rótulos, notas de lectura,
+> reglas del modelo, encabezados de tabla y tooltips— se publica en inglés, incluida la que
+> viaja dentro del JSON, que `scripts/build_data.py` emite ya traducida. Los nombres propios
+> del catálogo (aplicaciones, plataformas, assignment groups, procesos, sectores, personas)
+> **no se traducen**: son identificadores del inventario y traducirlos rompería el cruce con
+> ServiceNow. Este README y los comentarios del código siguen en español.
+
 ## Alcance
 
 **v1 cubre** impacto por proceso y ruteo, sobre 504 aplicaciones.
@@ -64,6 +71,7 @@ repositorio y ningún módulo de la aplicación lee del generador en tiempo de e
 | Corpus de calidad: elegibles de crudos | 242 706 de 277 408 |
 | Claves de AG unidas al corpus | 79 de 265 |
 | Series temporales: semanas · meses · trimestres · años | 138 · 33 · 12 · 4 |
+| Enlaces plataforma–aplicación (unidad del Sankey) | 468 sobre 240 aplicaciones distintas · sobrecuenta 228 |
 
 ### Diferencias contra las cifras esperadas en la especificación
 
@@ -88,18 +96,62 @@ AI/ML (142 · 52 · 81 · 32) sí coinciden. La brecha en conteos de AG es consi
 - **DQ1** — claves de AG duplicadas: 268 nombres colapsan a 265 claves normalizadas.
   Por eso el denominador de "claves unidas al corpus" es 265 y no 268.
 - **DQ2** — hueco entre el `ag_count` declarado por el inventario y el conteo real del puente.
+- **DQ3** — la hoja escribe el mismo no-valor de tres maneras: `TBD`, `Por confirmar` y
+  `not stated`. La interfaz trata las tres como no resuelto, por lo que **30 aplicaciones** que
+  antes mostraban un proceso o un sector aparente ahora muestran TBD. La compuerta *Atribuible*
+  **no se reescribe**: se conserva tal como la declara la hoja, y **18** de esas aplicaciones
+  siguen marcadas como atribuibles ahí. El desacuerdo se expone, no se reconcilia.
 
 Ambos viajan en `meta.data_quality_notes` y se muestran en la aplicación.
+
+## Las dos visualizaciones de `/graph`
+
+### Sankey · Plataforma → Proceso de negocio → Ruta de respuesta
+
+Un Sankey **suma por construcción**, y R4 dice que el blast radius no es aditivo. En lugar de
+renunciar al diagrama o de dejar que mienta, se cambia la unidad y se declara:
+
+- **La unidad del diagrama es el enlace plataforma–aplicación, no la aplicación.** Con las 38
+  plataformas hay 468 enlaces detrás de 240 aplicaciones distintas: el flujo **sobrecuenta en
+  228**, y las tres cifras se muestran juntas en la cabecera del diagrama.
+- **El flujo se conserva de extremo a extremo.** Cada aplicación tiene exactamente un proceso y
+  cae en exactamente un cubo de ruta, así que lo que entra a un nodo sale de él. La última
+  columna es un 2×2 de ruteo × propiedad (`Routed / No AG` × `DPM known / DPM TBD`).
+- **Los cubos con hueco se pintan en gris**, no en rojo: `No AG` y `DPM TBD` son huecos
+  declarados, no niveles de riesgo, y R5 prohíbe colorearlos como tales.
+- **El recorte se declara.** Al reducir el número de plataformas o de procesos, la nota dice
+  cuántas quedaron fuera, cuántos enlaces representan y sus nombres. Los procesos fuera del tope
+  se agrupan en una categoría visible en lugar de desaparecer.
+- Para el total deduplicado, el diagrama remite a `/blast-radius`, que es donde vive la unión.
+
+### Grafo de vecindad · Plataforma — Aplicación — Assignment Group
+
+Node-link en **SVG plano, sin librería de layout ni dependencia nueva**:
+
+- **Las posiciones son deterministas** (columnas, reparto uniforme en vertical). Una simulación
+  de fuerzas daría una imagen distinta en cada carga y eso, proyectado en una sala, se lee como
+  si el dato hubiera cambiado.
+- **El foco puede ser una aplicación, una plataforma o un Assignment Group.** El título de cada
+  columna se deduce del tipo de nodo que contiene, porque el significado de la columna cambia
+  con el foco.
+- **Las aristas E3 van punteadas y en el color de baja autoridad**, las E2 continuas: la
+  derivación de texto libre se distingue del análisis de Tech Buckets también en el grafo.
+- **Una columna vacía es un hueco declarado**, y se dice: una aplicación sin plataforma no tiene
+  columna izquierda, y la nota lo explica en lugar de dejar un carril en blanco.
+- **El recorte se declara.** Con un nodo de grado alto se dibujan 24 vecinos por lado y la nota
+  dice cuántos quedaron fuera. `POWER_BI` tiene 129 aplicaciones; el grafo nunca finge que la
+  vecindad es más pequeña de lo que es.
 
 ## Stack
 
 - Next.js 15 (App Router) + TypeScript, desplegable en Vercel sin configuración adicional.
 - **Sin backend, sin base de datos, sin autenticación, sin variables de entorno.** Un único
   JSON importado estáticamente. Las 504 fichas de aplicación se prerenderizan en build
-  (511 rutas estáticas en total).
+  (512 rutas estáticas en total).
 - Tailwind, sin librería de componentes.
-- Recharts, sólo donde una tabla no basta: serie de calidad, comparativo de cobertura AI/ML
-  y distribución del Decálogo.
+- Recharts, sólo donde una tabla no basta: serie de calidad, comparativo de cobertura AI/ML,
+  distribución del Decálogo y el Sankey de flujo.
+- El grafo de vecindad es SVG escrito a mano: **no se añadió ninguna dependencia** para él.
 
 ## Comandos
 
@@ -118,6 +170,7 @@ npm run verify      # criterios de aceptación contra la app corriendo
 |---|---|
 | `/` | Portfolio Health — 4 eslabones de cobertura, tabla filtrable de 504 apps, panel fijo de hueco declarado |
 | `/blast-radius` | Blast Radius — selector multi-plataforma, unión deduplicada, procesos afectados, ruta de respuesta |
+| `/graph` | Relationships — Sankey de flujo Plataforma → Proceso → Ruta de respuesta, y grafo de vecindad de cualquier nodo |
 | `/app/[app_id]` | Application Resolver — identidad, atribución, propiedad, operación con **todos** los Assignment Groups |
 | `/quality` | Work Notes Quality — corpus y elegibilidad, línea base y delta, series en 4 granularidades, ranking por AG, candidatos a SOP, Decálogo, patrones recurrentes |
 | `/ai-ops` | AI Ops — el segmento AI/ML medido con los mismos cuatro eslabones que el resto |
@@ -135,6 +188,7 @@ pantalla no pueda violarla por descuido.
 | **R1** la Business Application es la espina dorsal | `types/index.ts` · toda entidad se relaciona con `Application`, nunca entre sí |
 | **R2** toda relación es N:M | `platforms[]` y `ags[]` son listas; `agsOf()` / `platformsOf()` nunca devuelven un escalar |
 | **R3** ninguna métrica sin su cobertura | `<Metric>` / `<InlineMetric>` exigen `resolved` y `universe`; no existe camino para renderizar un porcentaje suelto. Las tablas de tasas declaran su denominador en `<TableCaption>` |
+| **R4** en el Sankey | `computeSankey()` devuelve `linkTotal`, `appTotal` y `overcount` juntos, y la pantalla los publica los tres: un diagrama que suma declara qué está sumando |
 | **R4** blast radius no aditivo | `computeBlast()` en `lib/data.ts` construye la unión deduplicada; la suma ingenua se conserva sólo para mostrarla tachada junto al traslape |
 | **R5** tickets = costo, nunca riesgo | `<SupportLoad>` usa un color neutro único y la etiqueta "eje de costo, no de riesgo" |
 | **R6** un solo instrumento de calidad | `/quality` declara QN v2.4.2 y expone la divergencia contra la regla binaria del xlsx sin mezclar bandas |
@@ -171,13 +225,14 @@ npm i -D playwright --no-save     # sólo para verificar; no es dependencia del 
 npm run verify
 ```
 
-Estado al último corte: **30/30**.
+Estado al último corte: **36/36**.
 
 Entre lo que comprueba: que la unión deduplicada aparezca y la suma sólo tachada; que no
-exista un porcentaje sin denominador en ninguna de las cinco rutas; que un delta negativo
+exista un porcentaje sin denominador en ninguna de las seis rutas; que un delta negativo
 con `down_is_good` se pinte **verde**; que las aplicaciones sin ruta sigan publicadas; que
-la fecha de corte y el panel de reglas estén en las cinco pantallas; y que los ganchos de
-la sección 7 sigan en el contrato.
+la fecha de corte y el panel de reglas estén en las seis pantallas; que el Sankey declare su
+unidad y su sobrecuenta y nombre las plataformas que dejó fuera; que el grafo distinga las
+aristas E3 de las E2; y que los ganchos de la sección 7 sigan en el contrato.
 
 ## Paleta
 
@@ -192,14 +247,14 @@ serie de referencia `#8496A8`, no los azules más pálidos de la paleta de inter
 ## Despliegue
 
 Vercel, preset Next.js, sin variables de entorno y sin secretos. `npm run build` produce
-511 rutas estáticas.
+512 rutas estáticas.
 
 **Tamaño, medido y no estimado.** El JSON pesa 692 KB en disco y **sí viaja al navegador**:
 las tres pantallas interactivas (blast radius, calidad, AI Ops) recalculan uniones,
 coberturas y ponderados en el cliente, y sin backend no hay dónde más hacerlo. El chunk que
 lo contiene son 700 KB sin comprimir, **86 KB con gzip**, compartido por las rutas que lo
 necesitan y cacheado tras la primera. Las páginas más pesadas (`/quality` y `/ai-ops`,
-315 kB de First Load JS) lo son por Recharts, no por el dato.
+~318 kB de First Load JS; `/graph`, 290 kB) lo son por Recharts, no por el dato.
 
 Si el extracto creciera un orden de magnitud, la salida sería precomputar por pantalla en
 `build_data.py` — no un backend, que sigue estando fuera del diseño de esta POC.

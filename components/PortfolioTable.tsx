@@ -14,7 +14,7 @@ const CRIT_ORDER: Record<Criticality, number> = { C1: 0, C2: 1, C3: 2, "C-": 3 }
 const PAGE = 60;
 
 export function PortfolioTable({
-  pool = applications, title = "Aplicaciones del portafolio", showGaps = true,
+  pool = applications, title = "Portfolio applications", showGaps = true,
 }: { pool?: Application[]; title?: string; showGaps?: boolean }) {
   const [f, setF] = useState<Filters>(EMPTY_FILTERS);
   const [sort, setSort] = useState<SortKey>("name");
@@ -33,7 +33,7 @@ export function PortfolioTable({
         case "criticality": return dir * (CRIT_ORDER[a.criticality] - CRIT_ORDER[b.criticality]);
         case "platforms": return dir * (a.platforms.length - b.platforms.length);
         case "ags": return dir * (a.ags.length - b.ags.length);
-        // Eje de costo: se ordena en su propia columna, nunca junto a criticidad.
+        // Cost axis: sorted in its own column, never next to criticality.
         case "tickets": return dir * ((a.tickets_2024 ?? -1) - (b.tickets_2024 ?? -1));
         case "process": return dir * a.process.localeCompare(b.process);
         case "sector": return dir * a.sector.localeCompare(b.sector);
@@ -66,20 +66,20 @@ export function PortfolioTable({
     <div className="space-y-4">
       {showGaps ? (
         <section className="card card-pad border-ev-e2/40 bg-ev-e2/[0.05]">
-          <SectionHeader kicker="Panel fijo · calculado desde los datos" title="Hueco declarado" />
+          <SectionHeader kicker="Pinned panel · computed from the data" title="Declared gap" />
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-            <Metric label="Sin plataforma" resolved={gaps.withoutPlatform} universe={gaps.universe} unitLabel="stack no resuelto" />
-            <Metric label="Sin Assignment Group" resolved={gaps.withoutAg} universe={gaps.universe} unitLabel="no ruteables" />
-            <Metric label="Sin DPM confirmado" resolved={gaps.withoutDpm} universe={gaps.universe} unitLabel="DPM en TBD" />
-            <Metric label="Sin atribución completa" resolved={gaps.withoutAttribution} universe={gaps.universe} unitLabel="proceso o sector ausente" />
-            <Metric label="Sin criticidad declarada" resolved={gaps.withoutCriticality} universe={gaps.universe} unitLabel="se muestran como No declarada" />
+            <Metric label="No platform" resolved={gaps.withoutPlatform} universe={gaps.universe} unitLabel="stack unresolved" />
+            <Metric label="No Assignment Group" resolved={gaps.withoutAg} universe={gaps.universe} unitLabel="not routable" />
+            <Metric label="No confirmed DPM" resolved={gaps.withoutDpm} universe={gaps.universe} unitLabel="DPM is TBD" />
+            <Metric label="Incomplete attribution" resolved={gaps.withoutAttribution} universe={gaps.universe} unitLabel="process or sector missing" />
+            <Metric label="No declared criticality" resolved={gaps.withoutCriticality} universe={gaps.universe} unitLabel="shown as Not declared" />
           </div>
           <div className="mt-3">
             <Note tone="warn">
-              Ninguna de estas aplicaciones se filtra fuera de la tabla: aparecen etiquetadas y cuentan
-              en el hueco. La criticidad no declarada no se imputa. Hoy son ruteables{" "}
-              <InlineMetric resolved={gaps.routable} universe={gaps.universe} />; el resto no puede
-              determinar el destino de un ticket.
+              None of these applications is filtered out of the table: they appear tagged and they count
+              towards the gap. Undeclared criticality is not imputed. Today{" "}
+              <InlineMetric resolved={gaps.routable} universe={gaps.universe} /> are routable; the rest
+              cannot determine where a ticket goes.
             </Note>
           </div>
         </section>
@@ -87,16 +87,16 @@ export function PortfolioTable({
 
       <section>
         <SectionHeader
-          kicker={`${active} filtro${active === 1 ? "" : "s"} activo${active === 1 ? "" : "s"}`}
+          kicker={`${active} active filter${active === 1 ? "" : "s"}`}
           title={title}
         >
           <div className="flex items-center gap-2">
             <span className="subtle">
-              Mostrando <InlineMetric resolved={filtered.length} universe={pool.length} />
+              Showing <InlineMetric resolved={filtered.length} universe={pool.length} />
             </span>
             {active > 0 ? (
               <button type="button" className="btn" onClick={() => { setF(EMPTY_FILTERS); setLimit(PAGE); }}>
-                Limpiar filtros
+                Clear filters
               </button>
             ) : null}
           </div>
@@ -105,50 +105,50 @@ export function PortfolioTable({
         <div className="card card-pad mb-3">
           <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
             <label className="block">
-              <span className="label">Nombre o APM</span>
-              <input className="input mt-1" value={f.q} onChange={(e) => set("q", e.target.value)} placeholder="Filtrar…" />
+              <span className="label">Name or APM</span>
+              <input className="input mt-1" value={f.q} onChange={(e) => set("q", e.target.value)} placeholder="Filter…" />
             </label>
-            <Select label="Proceso" value={f.process} onChange={(v) => set("process", v)} options={PROCESS_OPTIONS} />
+            <Select label="Process" value={f.process} onChange={(v) => set("process", v)} options={PROCESS_OPTIONS} />
             <Select label="Sector" value={f.sector} onChange={(v) => set("sector", v)} options={SECTOR_OPTIONS} />
-            <Select label="Criticidad" value={f.criticality} onChange={(v) => set("criticality", v)} options={CRITICALITY_OPTIONS} />
+            <Select label="Criticality" value={f.criticality} onChange={(v) => set("criticality", v)} options={CRITICALITY_OPTIONS} />
             <Select label="Scope status" value={f.scope} onChange={(v) => set("scope", v)} options={SCOPE_OPTIONS} />
             <label className="block">
-              <span className="label">Plataforma</span>
+              <span className="label">Platform</span>
               <select className="input mt-1" value={f.platform} onChange={(e) => set("platform", e.target.value)}>
-                <option value="">Todas</option>
+                <option value="">All</option>
                 {PLATFORM_OPTIONS.map((p) => (
                   <option key={p.platform_id} value={p.name}>{p.name} ({p.blast_radius_direct})</option>
                 ))}
               </select>
             </label>
             <label className="block">
-              <span className="label">Estado de compuerta</span>
+              <span className="label">Gate state</span>
               <select className="input mt-1" value={f.gate} onChange={(e) => set("gate", e.target.value)}>
-                <option value="">Cualquiera</option>
-                <option value="routable">Ruteable</option>
-                <option value="not-routable">No ruteable</option>
-                <option value="owned">Con dueño</option>
-                <option value="not-owned">Sin DPM confirmado</option>
-                <option value="attributable">Atribuible</option>
-                <option value="not-attributable">Sin atribución completa</option>
-                <option value="platform">Con plataforma</option>
-                <option value="not-platform">Sin plataforma</option>
+                <option value="">Any</option>
+                <option value="routable">Routable</option>
+                <option value="not-routable">Not routable</option>
+                <option value="owned">Owned</option>
+                <option value="not-owned">No confirmed DPM</option>
+                <option value="attributable">Attributable</option>
+                <option value="not-attributable">Incomplete attribution</option>
+                <option value="platform">Platform known</option>
+                <option value="not-platform">No platform</option>
               </select>
             </label>
           </div>
           <label className="mt-3 inline-flex items-center gap-2 text-sm text-ink-700">
             <input type="checkbox" checked={f.aiOnly} onChange={(e) => set("aiOnly", e.target.checked)}
               className="rounded border-ink-300 text-pep-700 focus:ring-pep-500" />
-            Solo aplicaciones AI/ML
+            AI/ML applications only
           </label>
         </div>
 
         {active > 0 ? (
           <div className="mb-3">
             <Note>
-              En la selección actual:{" "}
-              <InlineMetric resolved={gapsF.withoutAg} universe={gapsF.universe} /> sin AG ·{" "}
-              <InlineMetric resolved={gapsF.withoutDpm} universe={gapsF.universe} /> con DPM en TBD.
+              In the current selection:{" "}
+              <InlineMetric resolved={gapsF.withoutAg} universe={gapsF.universe} /> with no AG ·{" "}
+              <InlineMetric resolved={gapsF.withoutDpm} universe={gapsF.universe} /> with DPM in TBD.
             </Note>
           </div>
         ) : null}
@@ -158,16 +158,16 @@ export function PortfolioTable({
             <table className="w-full border-collapse">
               <thead className="border-b border-ink-200 bg-pep-50">
                 <tr>
-                  {th("name", "Aplicación")}
+                  {th("name", "Application")}
                   <th className="th">APM</th>
-                  {th("process", "Proceso")}
+                  {th("process", "Process")}
                   {th("sector", "Sector")}
-                  {th("criticality", "Criticidad")}
+                  {th("criticality", "Criticality")}
                   <th className="th">DPM</th>
-                  {th("platforms", "Plataformas")}
+                  {th("platforms", "Platforms")}
                   {th("ags", "AGs")}
-                  {th("tickets", "Carga de soporte")}
-                  <th className="th">Compuertas</th>
+                  {th("tickets", "Support load")}
+                  <th className="th">Gates</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-ink-100">
@@ -188,14 +188,14 @@ export function PortfolioTable({
                     <td className="td">
                       {a.ags.length > 0 ? <span className="num">{a.ags.length}</span> : <NotRoutableTag />}
                     </td>
-                    {/* Sin semáforo: un solo color cualquiera que sea el volumen. */}
+                    {/* No traffic light: one colour whatever the volume. */}
                     <td className="td"><SupportLoad value={a.tickets_2024} /></td>
                     <td className="td"><GateChips gates={a.gates} /></td>
                   </tr>
                 ))}
                 {sorted.length === 0 ? (
                   <tr><td colSpan={10} className="td py-8 text-center text-ink-500">
-                    Ninguna aplicación cumple los filtros.
+                    No application matches these filters.
                   </td></tr>
                 ) : null}
               </tbody>
@@ -204,16 +204,16 @@ export function PortfolioTable({
           <div className="border-t border-ink-200 bg-pep-50 px-3 py-2 text-center">
             {limit < sorted.length ? (
               <button type="button" className="btn" onClick={() => setLimit((l) => l + PAGE * 2)}>
-                Mostrar más — {limit} de {sorted.length} visibles
+                Show more — {limit} of {sorted.length} visible
               </button>
             ) : (
-              <span className="subtle num">{sorted.length} de {UNIVERSE} aplicaciones del universo</span>
+              <span className="subtle num">{sorted.length} of {UNIVERSE} applications in the universe</span>
             )}
           </div>
         </div>
         <p className="subtle mt-2">
-          Carga de soporte es <span className="num">tickets_2024</span> y es eje de costo, no de riesgo:
-          no se colorea ni se ordena junto a criticidad.
+          Support load is <span className="num">tickets_2024</span> and it is a cost axis, not a risk
+          axis: it is neither colour-coded nor ranked next to criticality.
         </p>
       </section>
     </div>
@@ -227,7 +227,7 @@ function Select({ label, value, onChange, options }: {
     <label className="block">
       <span className="label">{label}</span>
       <select className="input mt-1" value={value} onChange={(e) => onChange(e.target.value)}>
-        <option value="">Todos</option>
+        <option value="">All</option>
         {options.map((o) => <option key={o} value={o}>{o}</option>)}
       </select>
     </label>

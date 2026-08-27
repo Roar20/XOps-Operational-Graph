@@ -9,7 +9,7 @@ import { InlineMetric, Metric } from "@/components/Metric";
 import { Note, SectionHeader, TableCaption } from "@/components/SectionHeader";
 import { EvidenceBadge } from "@/components/EvidenceBadge";
 
-/** Los huecos se recalculan del dato; ninguna cifra de esta pantalla esta escrita a mano. */
+/** Gaps are recomputed from the data; no figure on this screen is hand-written. */
 const GAPS = computeGaps();
 
 export function generateStaticParams() {
@@ -19,7 +19,7 @@ export function generateStaticParams() {
 export async function generateMetadata({ params }: { params: Promise<{ app_id: string }> }) {
   const { app_id } = await params;
   const app = getApp(app_id);
-  return { title: app ? `${app.name} · XOps Operational Graph` : "Aplicación no encontrada" };
+  return { title: app ? `${app.name} · XOps Operational Graph` : "Application not found" };
 }
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
@@ -32,9 +32,9 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
   );
 }
 
-/** Los campos del inventario que llegan vacios se muestran vacios, no se rellenan. */
+/** Inventory fields that arrive empty are shown empty; they are never filled in. */
 function Raw({ value }: { value: string | null | undefined }) {
-  if (!value || !value.trim()) return <span className="subtle italic">sin capturar</span>;
+  if (!value || !value.trim()) return <span className="subtle italic">not captured</span>;
   return <span>{value}</span>;
 }
 
@@ -48,9 +48,9 @@ export default async function AppResolverPage({ params }: { params: Promise<{ ap
   const q = qualityOfAgs(app.ags);
   const sectors = app.sector.split(",").map((s) => s.trim()).filter(Boolean);
   const agSourceLabel = app.ag_source_kind === "bridge"
-    ? "puente Aplicación → Assignment Group (lista completa)"
+    ? "the Application → Assignment Group bridge (complete list)"
     : app.ag_source_kind === "inventory"
-      ? "columna Assignment Group del inventario (tope de 10 entradas)"
+      ? "the inventory’s Assignment Group column (capped at 10 entries)"
       : null;
 
   return (
@@ -63,28 +63,28 @@ export default async function AppResolverPage({ params }: { params: Promise<{ ap
           <CriticalityChip value={app.criticality} withLabel />
           {app.ags.length === 0 ? <NotRoutableTag /> : null}
         </div>
-        <p className="num subtle mt-1">{app.apm} · {app.app_id} · {app.scope_status || "sin scope status"}</p>
+        <p className="num subtle mt-1">{app.apm} · {app.app_id} · {app.scope_status || "no scope status"}</p>
       </div>
 
-      {/* ---------------- 1 identidad · 2 atribucion · 3 propiedad ---------------- */}
+      {/* ---------------- 1 identity · 2 attribution · 3 ownership ---------------- */}
       <div className="grid gap-5 lg:grid-cols-3">
         <section className="card card-pad">
-          <SectionHeader title="Identidad" kicker="Bloque 1" />
+          <SectionHeader title="Identity" kicker="Block 1" />
           <dl className="space-y-3">
-            <Field label="Nombre">{app.name}</Field>
+            <Field label="Name">{app.name}</Field>
             <Field label="APM"><span className="num">{app.apm}</span></Field>
-            <Field label="Categoría"><Raw value={app.category} /></Field>
+            <Field label="Category"><Raw value={app.category} /></Field>
             <Field label="Scope status"><Raw value={app.scope_status} /></Field>
-            <Field label="Programa"><Raw value={app.program} /></Field>
-            <Field label="Arquetipo"><Raw value={app.archetype} /></Field>
-            <Field label="Segmento AI/ML">{app.is_ai_ml ? "Sí" : "No"}</Field>
+            <Field label="Programme"><Raw value={app.program} /></Field>
+            <Field label="Archetype"><Raw value={app.archetype} /></Field>
+            <Field label="AI/ML segment">{app.is_ai_ml ? "Yes" : "No"}</Field>
           </dl>
         </section>
 
         <section className="card card-pad">
-          <SectionHeader title="Atribución" kicker="Bloque 2" />
+          <SectionHeader title="Attribution" kicker="Block 2" />
           <dl className="space-y-3">
-            <Field label="Proceso de negocio"><TbdValue value={app.process} /></Field>
+            <Field label="Business process"><TbdValue value={app.process} /></Field>
             <Field label="Sector">
               {sectors.length === 0 ? <TbdValue value={null} /> : (
                 <span className="flex flex-wrap gap-1">
@@ -94,60 +94,60 @@ export default async function AppResolverPage({ params }: { params: Promise<{ ap
                 </span>
               )}
             </Field>
-            <Field label="Criticidad normalizada"><CriticalityChip value={app.criticality} withLabel /></Field>
-            {/* R9 · la normalizacion no borra el vocabulario de origen: los dos siguen en circulacion. */}
+            <Field label="Normalized criticality"><CriticalityChip value={app.criticality} withLabel /></Field>
+            {/* R7 · normalization does not erase the source vocabulary: both are still in circulation. */}
             <Field
-              label="Criticidad de origen (criticality_raw)"
-              hint="Los vocabularios BC1–BC3 y RP1–RP3 siguen en circulación; la normalización a C1–C3 es derivada."
+              label="Source criticality (criticality_raw)"
+              hint="The BC1–BC3 and RP1–RP3 vocabularies are both still in circulation; the normalization to C1–C3 is derived."
             >
               {app.criticality_raw?.trim()
                 ? <span className="num rounded border border-ink-300 bg-ink-50 px-1.5 py-0.5 text-xs">{app.criticality_raw}</span>
                 : <TbdValue value={null} />}
             </Field>
-            <Field label="Peso de criticidad" hint={meta.criticality_scale[app.criticality] ?? undefined}>
+            <Field label="Criticality weight" hint={meta.criticality_scale[app.criticality] ?? undefined}>
               <span className="num">{app.criticality_weight}</span>
             </Field>
-            <Field label="Compuertas"><GateChips gates={app.gates} /></Field>
+            <Field label="Gates"><GateChips gates={app.gates} /></Field>
           </dl>
         </section>
 
         <section className="card card-pad">
-          <SectionHeader title="Propiedad" kicker="Bloque 3" />
+          <SectionHeader title="Ownership" kicker="Block 3" />
           <dl className="space-y-3">
             <Field label="DPM"><TbdValue value={app.dpm} /></Field>
             <Field label="DPM L3"><TbdValue value={app.dpm_l3} /></Field>
             <Field label="Owner"><TbdValue value={app.owner} /></Field>
             <Field label="Tech lead"><TbdValue value={app.tech_lead} /></Field>
             <Field label="Service tier"><Raw value={app.service_tier} /></Field>
-            <Field label="Ventana de soporte"><Raw value={app.support_window} /></Field>
-            {/* R3 · los tickets son eje de costo, jamas eje de riesgo: un solo color. */}
-            <Field label="Carga de soporte (tickets 2024)" hint="Eje de costo. No es señal de riesgo y no se colorea como tal.">
+            <Field label="Support window"><Raw value={app.support_window} /></Field>
+            {/* R5 · tickets are a cost axis, never a risk axis: a single colour. */}
+            <Field label="Support load (2024 tickets)" hint="A cost axis. It is not a risk signal and is not coloured as one.">
               {app.tickets_2024 === null
                 ? <TbdValue value={null} />
                 : <SupportLoad value={app.tickets_2024} showLabel />}
             </Field>
-            <Field label="Reportes declarados">
+            <Field label="Declared reports">
               {app.declared_reports === null ? <TbdValue value={null} /> : <span className="num">{app.declared_reports}</span>}
             </Field>
           </dl>
         </section>
       </div>
 
-      {/* ---------------- plataformas: derivacion visible ---------------- */}
+      {/* ---------------- platforms: the derivation stays visible ---------------- */}
       <section className="card card-pad">
         <SectionHeader
-          kicker={`${plats.length} plataforma${plats.length === 1 ? "" : "s"}`}
-          title="Plataformas sobre las que corre"
+          kicker={`${plats.length} platform${plats.length === 1 ? "" : "s"}`}
+          title="Platforms it runs on"
         >
           {app.platform_evidence_tier ? <EvidenceBadge tier={app.platform_evidence_tier} showAuthority /> : null}
         </SectionHeader>
 
         {plats.length === 0 ? (
           <Note tone="warn">
-            Sin plataforma identificada. El eslabón Plataforma → Aplicación no está resuelto para esta
-            aplicación, por lo tanto no aparece en ningún blast radius. Se queda en la lista y cuenta en el
-            hueco: <InlineMetric resolved={GAPS.withoutPlatform} universe={GAPS.universe} /> de las aplicaciones
-            están en la misma situación.
+            No platform identified. The Platform → Application link is unresolved for this application, so it
+            appears in no blast radius. It stays in the list and it counts towards the gap:{" "}
+            <InlineMetric resolved={GAPS.withoutPlatform} universe={GAPS.universe} /> of the applications are in
+            the same situation.
           </Note>
         ) : (
           <>
@@ -162,16 +162,16 @@ export default async function AppResolverPage({ params }: { params: Promise<{ ap
                     {p.is_legacy ? <span className="rounded border border-ink-300 bg-ink-50 px-1 py-0.5 text-[10px] text-ink-500">legacy</span> : null}
                   </div>
                   <div className="subtle num">
-                    tier {p.tier} · {p.blast_radius_direct} apps directas · {p.routable_pct.toFixed(1)}% ruteables
+                    tier {p.tier} · {p.blast_radius_direct} direct apps · {p.routable_pct.toFixed(1)}% routable
                   </div>
                 </li>
               ))}
             </ul>
 
-            {/* R9 · la derivacion no se disfraza de dato. */}
+            {/* R7 · a derivation never disguises itself as source data. */}
             <div className="mt-3 rounded-md border border-ink-200 bg-ink-50 p-3">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="label">Origen de la clasificación</span>
+                <span className="label">Origin of the classification</span>
                 {app.platform_evidence_tier ? <EvidenceBadge tier={app.platform_evidence_tier} /> : null}
                 <span className="text-xs text-ink-700">
                   {app.platform_evidence_tier ? meta.link_sources.platform[app.platform_evidence_tier] : null}
@@ -179,32 +179,32 @@ export default async function AppResolverPage({ params }: { params: Promise<{ ap
               </div>
               {app.platform_evidence_tier === "E3" ? (
                 <p className="mt-1 text-xs text-ink-600">
-                  Esta asignación se derivó normalizando texto libre. No tiene la misma autoridad que las
-                  plataformas provenientes del análisis de Tech Buckets (E2). La cadena original se conserva abajo.
+                  This assignment was derived by normalizing free text. It does not carry the same authority as
+                  platforms coming from the Tech Buckets analysis (E2). The original string is kept below.
                 </p>
               ) : (
                 <p className="mt-1 text-xs text-ink-600">
-                  Proviene del análisis de Tech Buckets, no de normalización de texto libre.
+                  It comes from the Tech Buckets analysis, not from free-text normalization.
                 </p>
               )}
               {app.technology_raw ? (
                 <>
-                  <div className="label mt-2">technology_raw · cadena original sin transformar</div>
+                  <div className="label mt-2">technology_raw · original string, untransformed</div>
                   <pre className="num mt-1 overflow-x-auto whitespace-pre-wrap rounded border border-ink-200 bg-white px-2 py-1.5 text-xs text-ink-800">{app.technology_raw}</pre>
                 </>
               ) : (
-                <p className="subtle mt-2">Sin <span className="num">technology_raw</span>: el inventario no capturó Technology Stack para esta aplicación.</p>
+                <p className="subtle mt-2">No <span className="num">technology_raw</span>: the inventory did not capture a Technology Stack for this application.</p>
               )}
             </div>
           </>
         )}
       </section>
 
-      {/* ---------------- 4 operacion · el punto de la pantalla ---------------- */}
+      {/* ---------------- 4 operation · the point of this screen ---------------- */}
       <section className="card card-pad">
         <SectionHeader
-          kicker={`Bloque 4 · ${ags.length} assignment group${ags.length === 1 ? "" : "s"}`}
-          title="Operación — todos los Assignment Groups"
+          kicker={`Block 4 · ${ags.length} assignment group${ags.length === 1 ? "" : "s"}`}
+          title="Operation — every Assignment Group"
         >
           {app.ag_evidence_tier ? <EvidenceBadge tier={app.ag_evidence_tier} showAuthority /> : null}
         </SectionHeader>
@@ -212,19 +212,19 @@ export default async function AppResolverPage({ params }: { params: Promise<{ ap
         <Note tone={ags.length === 0 ? "warn" : "neutral"}>
           {ags.length === 0 ? (
             <>
-              Esta aplicación <strong>no tiene Assignment Group declarado</strong>. Un incidente sobre ella no
-              encuentra destino. Se conserva en el inventario y cuenta en el hueco de ruteo:{" "}
-              <InlineMetric resolved={GAPS.withoutAg} universe={GAPS.universe} /> de las aplicaciones están en la
-              misma situación.
+              This application <strong>has no declared Assignment Group</strong>. An incident on it finds no
+              destination. It stays in the inventory and it counts towards the routing gap:{" "}
+              <InlineMetric resolved={GAPS.withoutAg} universe={GAPS.universe} /> of the applications are in the
+              same situation.
             </>
           ) : (
             <>
-              La aplicación por sí sola <strong>no determina el destino del ticket</strong>. Corre sobre{" "}
-              <span className="num font-semibold">{ags.length}</span> grupo{ags.length === 1 ? "" : "s"} de asignación
-              y se listan <strong>todos</strong>, sin elegir uno como “el” responsable: para resolver el destino se
-              requiere un discriminador adicional (subservicio, síntoma o CI), que no está en este modelo.
-              En el portafolio, <InlineMetric resolved={multiAgApps} universe={UNIVERSE} /> tienen más de uno y una
-              llega a <span className="num font-semibold">{maxAgCount}</span>.
+              The application on its own <strong>does not determine where the ticket goes</strong>. It runs on{" "}
+              <span className="num font-semibold">{ags.length}</span> assignment group{ags.length === 1 ? "" : "s"}
+              {" "}and <strong>all of them</strong> are listed, without picking one as “the” owner: resolving the
+              destination needs an extra discriminator (subservice, symptom or CI) that this model does not carry.
+              Across the portfolio, <InlineMetric resolved={multiAgApps} universe={UNIVERSE} /> have more than one
+              and one reaches <span className="num font-semibold">{maxAgCount}</span>.
             </>
           )}
         </Note>
@@ -238,10 +238,10 @@ export default async function AppResolverPage({ params }: { params: Promise<{ ap
                     <th className="th w-8">#</th>
                     <th className="th">Assignment Group</th>
                     <th className="th">Clave</th>
-                    <th className="th text-right">Apps del grupo</th>
-                    <th className="th">Procesos que cubre</th>
+                    <th className="th text-right">Apps in the group</th>
+                    <th className="th">Processes it covers</th>
                     <th className="th">DPMs</th>
-                    <th className="th">Corpus de calidad</th>
+                    <th className="th">Quality corpus</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-ink-100">
@@ -259,8 +259,8 @@ export default async function AppResolverPage({ params }: { params: Promise<{ ap
                       </td>
                       <td className="td text-xs">
                         {g.has_quality
-                          ? <span className="text-good">medido</span>
-                          : <span className="text-ink-400">sin corpus elegible</span>}
+                          ? <span className="text-good">measured</span>
+                          : <span className="text-ink-400">no eligible corpus</span>}
                       </td>
                     </tr>
                   ))}
@@ -269,77 +269,78 @@ export default async function AppResolverPage({ params }: { params: Promise<{ ap
             </div>
             {agSourceLabel ? (
               <p className="subtle mt-2">
-                Lista tomada de: {agSourceLabel}. {app.ag_evidence_tier ? meta.link_sources.assignment_group[app.ag_evidence_tier] : null}
+                List taken from {agSourceLabel}. {app.ag_evidence_tier ? meta.link_sources.assignment_group[app.ag_evidence_tier] : null}
               </p>
             ) : null}
           </>
         ) : null}
       </section>
 
-      {/* ---------------- calidad: aproximacion declarada, nunca atribuida a la app ---------------- */}
+      {/* ---------------- quality: a declared approximation, never attributed to the app ---------------- */}
       {ags.length > 0 ? (
         <section className="card card-pad">
-          <SectionHeader kicker="Calidad de work notes" title="Calidad de los grupos que atienden esta aplicación">
-            <ApproxTag>se mide por AG, no por aplicación</ApproxTag>
+          <SectionHeader kicker="Work notes quality" title="Quality of the groups that serve this application">
+            <ApproxTag>measured per AG, not per application</ApproxTag>
           </SectionHeader>
 
           <Note tone="warn">
-            Estas cifras describen a los <strong>grupos</strong>, no a esta aplicación. Un AG atiende muchas
-            aplicaciones, así que su tasa diagnóstica no es atribuible a ninguna en particular. Además solo se
-            miden los grupos con corpus elegible:{" "}
-            <InlineMetric resolved={q.measured} universe={q.total} /> de los AGs de esta aplicación tienen medición,
-            y en todo el modelo solo{" "}
+            These figures describe the <strong>groups</strong>, not this application. An AG serves many
+            applications, so its diagnostic rate is not attributable to any one of them. On top of that, only
+            groups with an eligible corpus are measured:{" "}
+            <InlineMetric resolved={q.measured} universe={q.total} /> of this application’s AGs have a measurement,
+            and across the whole model only{" "}
             <InlineMetric resolved={quality.meta.join_coverage.ags_matched} universe={quality.meta.join_coverage.ags_bridge} />{" "}
-            de las claves de grupo se pudieron unir al corpus.
+            of the group keys could be joined to the corpus.
           </Note>
 
           {q.measured === 0 ? (
             <p className="mt-3 text-sm text-ink-600">
-              Ninguno de los {q.total} grupos de esta aplicación alcanza el umbral de elegibilidad
-              ({quality.meta.eligibility_rule}). No hay medición que mostrar y no se sustituye por un promedio del portafolio.
+              None of this application’s {q.total} groups reaches the eligibility threshold
+              ({quality.meta.eligibility_rule}). There is no measurement to show, and it is not replaced by a
+              portfolio average.
             </p>
           ) : (
             <>
               <div className="mt-3 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-                <Metric compact label="AGs con medición" resolved={q.measured} universe={q.total} unitLabel="de los AGs de esta app" />
+                <Metric compact label="AGs with a measurement" resolved={q.measured} universe={q.total} unitLabel="of this app’s AGs" />
                 <div>
-                  <div className="label">Tasa diagnóstica ponderada</div>
+                  <div className="label">Weighted diagnostic rate</div>
                   <div className="num text-lg font-semibold text-pep-900">{q.diagnostic_rate?.toFixed(1)}%</div>
-                  <div className="subtle num mt-0.5">sobre {q.incidents.toLocaleString("es-MX")} incidentes de esos AGs</div>
+                  <div className="subtle num mt-0.5">over {q.incidents.toLocaleString("en-US")} incidents from those AGs</div>
                 </div>
                 <div>
-                  <div className="label">Con causa raíz</div>
+                  <div className="label">With root cause</div>
                   <div className="num text-lg font-semibold text-pep-900">{q.has_root_rate?.toFixed(1)}%</div>
-                  <div className="subtle num mt-0.5">sobre {q.incidents.toLocaleString("es-MX")} incidentes</div>
+                  <div className="subtle num mt-0.5">over {q.incidents.toLocaleString("en-US")} incidents</div>
                 </div>
                 <div>
-                  <div className="label">Documentación pobre</div>
+                  <div className="label">Poor documentation</div>
                   <div className="num text-lg font-semibold text-pep-900">{q.poor_rate?.toFixed(1)}%</div>
-                  <div className="subtle num mt-0.5">sobre {q.incidents.toLocaleString("es-MX")} incidentes</div>
+                  <div className="subtle num mt-0.5">over {q.incidents.toLocaleString("en-US")} incidents</div>
                 </div>
               </div>
 
               <div className="mt-3 scroll-thin overflow-x-auto">
                 <table className="w-full border-collapse">
                   <TableCaption>
-                    Cada tasa se calcula sobre la columna <span className="num">Incidentes</span> de su fila, que
-                    son los incidentes de ese grupo — no los de esta aplicación.
+                    Every rate is computed over the <span className="num">Incidents</span> column of its row,
+                    which are that group’s incidents — not this application’s.
                   </TableCaption>
                   <thead className="border-b border-ink-200 bg-ink-50">
                     <tr>
-                      <th className="th">Grupo medido</th>
-                      <th className="th text-right">Incidentes</th>
-                      <th className="th text-right">Tasa diagnóstica</th>
-                      <th className="th text-right">Con causa raíz</th>
-                      <th className="th text-right">Score QN v2.4.2</th>
-                      <th className="th text-right">Doc. pobre</th>
+                      <th className="th">Measured group</th>
+                      <th className="th text-right">Incidents</th>
+                      <th className="th text-right">Diagnostic rate</th>
+                      <th className="th text-right">With root cause</th>
+                      <th className="th text-right">QN v2.4.2 score</th>
+                      <th className="th text-right">Poor docs</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-ink-100">
                     {q.rows.map((r) => (
                       <tr key={r.ag_key} className="row-hover">
                         <td className="td font-medium">{r.name}</td>
-                        <td className="num td text-right">{r.incidents.toLocaleString("es-MX")}</td>
+                        <td className="num td text-right">{r.incidents.toLocaleString("en-US")}</td>
                         <td className="num td text-right">{r.diagnostic_rate.toFixed(1)}%</td>
                         <td className="num td text-right">{r.has_root_rate.toFixed(1)}%</td>
                         <td className="num td text-right">{r.avg_score.toFixed(2)}</td>
@@ -354,31 +355,31 @@ export default async function AppResolverPage({ params }: { params: Promise<{ ap
         </section>
       ) : null}
 
-      {/* ---------------- lo que esta ficha no puede responder ---------------- */}
+      {/* ---------------- what this record cannot answer ---------------- */}
       <section className="card card-pad">
-        <SectionHeader kicker="Límite declarado" title="Lo que esta ficha no responde" />
+        <SectionHeader kicker="Declared limit" title="What this record does not answer" />
         <ul className="list-disc space-y-1 pl-5 text-sm text-ink-700">
           <li>
-            <strong>Cuántos usuarios dependen de esta aplicación.</strong> El eslabón Aplicación → Audiencia
-            no está capturado en v1. Es decisión de alcance, no descuido.
+            <strong>How many users depend on this application.</strong> The Application → Audience link is not
+            captured in v1. That is a scope decision, not an oversight.
           </li>
           <li>
-            <strong>Qué dashboards se caen con ella.</strong> El eslabón Dashboard → Aplicación tiene{" "}
+            <strong>Which dashboards go down with it.</strong> The Dashboard → Application link has{" "}
             <InlineMetric resolved={meta.dashboard_link.confirmed} universe={meta.dashboard_link.workspaces} />{" "}
-            workspaces confirmados. Queda fuera de v1.
+            workspaces confirmed. It is out of v1.
           </li>
           <li>
-            <strong>A qué grupo va un ticket concreto.</strong> Se listan todos los AGs porque el modelo no
-            contiene el discriminador que elige entre ellos.
+            <strong>Which group a specific ticket goes to.</strong> Every AG is listed because the model does
+            not contain the discriminator that chooses between them.
           </li>
           {isTbd(app.dpm) ? (
             <li>
-              <strong>Quién responde a nivel DPM.</strong> El DPM de esta aplicación está en TBD y no se imputa
-              desde el DPM L3 ni desde el owner.
+              <strong>Who answers at DPM level.</strong> This application’s DPM is TBD and it is not imputed
+              from the DPM L3 nor from the owner.
             </li>
           ) : null}
         </ul>
-        <p className="subtle mt-3">Corte de datos {meta.as_of}. Fuente: {meta.source_file}.</p>
+        <p className="subtle mt-3">Data cut-off {meta.as_of}. Source: {meta.source_file}.</p>
       </section>
     </div>
   );

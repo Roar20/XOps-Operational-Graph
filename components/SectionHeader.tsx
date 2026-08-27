@@ -14,7 +14,7 @@ export function SectionHeader({ title, kicker, children }: {
   );
 }
 
-/** Nota de lectura: declara lo no resuelto en el lugar donde importa. */
+/** Reading note: declares what is unresolved right where it matters. */
 export function Note({ children, tone = "neutral" }: {
   children: ReactNode; tone?: "neutral" | "warn";
 }) {
@@ -25,9 +25,9 @@ export function Note({ children, tone = "neutral" }: {
 }
 
 /**
- * R3 · Una tabla de tasas declara su denominador una vez, en el caption, en
- * lugar de repetirlo en cada celda. Sin caption, un "34.5%" en una celda seria
- * un porcentaje suelto; con el, la columna que lo divide queda nombrada.
+ * R3 · A table of rates declares its denominator once, in the caption, instead
+ * of repeating it in every cell. Without a caption a "34.5%" would be a bare
+ * percentage; with it, the column that divides it is named.
  */
 export function TableCaption({ children }: { children: ReactNode }) {
   return (

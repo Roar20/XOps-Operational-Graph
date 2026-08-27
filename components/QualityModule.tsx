@@ -11,15 +11,15 @@ import { EvidenceBadge } from "@/components/EvidenceBadge";
 import { ApproxTag } from "@/components/Chips";
 import { QualitySeries, DecalogueChart } from "@/components/QualityCharts";
 
-/* Nombre legible y unidad de cada metrica. El scorer canonico es uno solo:
-   QN v2.4.2. Nada en esta pantalla mezcla instrumentos. */
+/* Readable name and unit for each metric. There is a single canonical scorer,
+   QN v2.4.2. Nothing on this screen mixes instruments. */
 const METRICS: { key: QualityMetricKey; label: string; unit: "pp" | "pts"; hint: string }[] = [
-  { key: "diagnostic_rate", label: "Tasa diagnóstica", unit: "pp", hint: "Incidentes con causa raíz y documentación de resolución." },
-  { key: "has_root_rate", label: "Con causa raíz", unit: "pp", hint: "Root Cause > 0." },
-  { key: "has_res_rate", label: "Con documentación de resolución", unit: "pp", hint: "Resolution Docs > 0." },
-  { key: "avg_score", label: "Score promedio QN v2.4.2", unit: "pts", hint: "Puntaje del scorer canónico, 0–100." },
-  { key: "poor_critical_rate", label: "Documentación pobre en críticos", unit: "pp", hint: "Banda Baja sobre incidentes de prioridad crítica." },
-  { key: "reopen_rate", label: "Tasa de reapertura", unit: "pp", hint: "Incidentes reabiertos." },
+  { key: "diagnostic_rate", label: "Diagnostic rate", unit: "pp", hint: "Incidents with both a root cause and resolution documentation." },
+  { key: "has_root_rate", label: "With root cause", unit: "pp", hint: "Root Cause > 0." },
+  { key: "has_res_rate", label: "With resolution docs", unit: "pp", hint: "Resolution Docs > 0." },
+  { key: "avg_score", label: "Average QN v2.4.2 score", unit: "pts", hint: "Score from the canonical scorer, 0–100." },
+  { key: "poor_critical_rate", label: "Poor documentation on criticals", unit: "pp", hint: "Low band over critical-priority incidents." },
+  { key: "reopen_rate", label: "Reopen rate", unit: "pp", hint: "Incidents reopened." },
 ];
 const LABEL = Object.fromEntries(METRICS.map((m) => [m.key, m.label])) as Record<string, string>;
 
@@ -44,8 +44,8 @@ export function QualityModule() {
     return [...rows].sort((a, b) => (a[agSort] - b[agSort]) * dir);
   }, [agSort, agAsc, minIncidents]);
 
-  /* Candidatos a SOP: alto volumen y baja tasa diagnostica. El criterio se
-     declara con sus dos umbrales, calculados de la propia distribucion. */
+  /* SOP candidates: high volume and low diagnostic rate. The criterion is stated
+     with both of its thresholds, computed from the observed distribution. */
   const sopCandidates = useMemo(() => {
     const rows = quality.by_assignment_group;
     const sortedVol = [...rows].map((r) => r.incidents).sort((a, b) => a - b);
@@ -67,82 +67,82 @@ export function QualityModule() {
       <header>
         <h1 className="text-2xl font-semibold tracking-tight text-pep-900">Work Notes Quality</h1>
         <p className="mt-1 max-w-3xl text-sm text-ink-700">
-          Qué tan bien se documenta lo que se resuelve. La calidad se mide sobre el corpus de incidentes por
-          Assignment Group, con un único scorer canónico y una regla de elegibilidad escrita antes de fijar la
-          línea base.
+          How well the work that gets resolved is documented. Quality is measured over the incident corpus
+          per Assignment Group, with a single canonical scorer and an eligibility rule written down before
+          the baseline was fixed.
         </p>
         <p className="num subtle mt-1">
-          {qm.corpus} · corte {qm.as_of} · instrumento {qm.instrument}
+          {qm.corpus} · cut-off {qm.as_of} · instrument {qm.instrument}
         </p>
       </header>
 
       {/* ---------- R6 · la elegibilidad es parte de la metrica ---------- */}
       <section className="card card-pad">
-        <SectionHeader kicker="R6 · denominador" title="Corpus y regla de elegibilidad">
+        <SectionHeader kicker="R6 · denominator" title="Corpus and eligibility rule">
           <EvidenceBadge tier="E3" showAuthority />
         </SectionHeader>
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           <Metric
-            label="Incidentes elegibles"
+            label="Eligible incidents"
             resolved={qm.eligible}
             universe={qm.universe_raw}
-            unitLabel="del corpus crudo"
+            unitLabel="of the raw corpus"
           />
           <Metric
-            label="Claves de AG unidas al corpus"
+            label="AG keys joined to the corpus"
             resolved={qm.join_coverage.ags_matched}
             universe={qm.join_coverage.ags_bridge}
-            unitLabel="claves distintas del modelo"
+            unitLabel="distinct keys in the model"
             tone="gap"
           />
           <Metric
-            label="Aplicaciones alcanzadas por la medición"
+            label="Applications reached by the measurement"
             resolved={qm.join_coverage.apps_reached}
             universe={qm.join_coverage.apps_universe}
-            unitLabel="vía sus AGs"
+            unitLabel="through their AGs"
             tone="gap"
           />
           <Metric
-            label="Plataformas alcanzadas"
+            label="Platforms reached"
             resolved={qm.join_coverage.platforms_reached}
             universe={qm.join_coverage.platforms_universe}
-            unitLabel="vía sus AGs"
+            unitLabel="through their AGs"
           />
         </div>
         <div className="mt-3 space-y-2">
           <Note>
-            <strong>Regla de elegibilidad:</strong> {qm.eligibility_rule}
+            <strong>Eligibility rule:</strong> {qm.eligibility_rule}
           </Note>
           <Note tone="warn">
-            <strong>Efecto de la regla:</strong> {qm.eligibility_effect}
+            <strong>Effect of the rule:</strong> {qm.eligibility_effect}
           </Note>
           <Note>
-            <strong>Regla de calidad:</strong> {qm.quality_rule}
+            <strong>Quality rule:</strong> {qm.quality_rule}
           </Note>
           <Note tone="warn">
-            <strong>Alcance del join:</strong> {qm.join_note} Son dos catálogos distintos y no uno dentro del
-            otro: el corpus trae <span className="num font-semibold">{qm.join_coverage.ags_quality}</span> grupos y
-            el modelo <span className="num font-semibold">{TOTAL_AGS}</span> nombres que colapsan a{" "}
-            <span className="num font-semibold">{qm.join_coverage.ags_bridge}</span> claves distintas (ver DQ1).
-            Solo <span className="num font-semibold">{qm.join_coverage.ags_matched}</span> claves aparecen en
-            ambos; el corpus unido cubre{" "}
-            <span className="num font-semibold">{qm.join_coverage.incident_coverage_pct.toFixed(1)}%</span> de los
-            incidentes elegibles. Toda calidad atribuida a una aplicación o a una plataforma es una aproximación{" "}
-            <ApproxTag /> y así se etiqueta en las demás pantallas.
+            <strong>Join reach:</strong> {qm.join_note} These are two distinct catalogues, not one nested in
+            the other: the corpus carries <span className="num font-semibold">{qm.join_coverage.ags_quality}</span>{" "}
+            groups and the model <span className="num font-semibold">{TOTAL_AGS}</span> names that collapse into{" "}
+            <span className="num font-semibold">{qm.join_coverage.ags_bridge}</span> distinct keys (see DQ1).
+            Only <span className="num font-semibold">{qm.join_coverage.ags_matched}</span> keys appear in both;
+            the joined corpus covers{" "}
+            <span className="num font-semibold">{qm.join_coverage.incident_coverage_pct.toFixed(1)}%</span> of the
+            eligible incidents. Any quality attributed to an application or a platform is an approximation{" "}
+            <ApproxTag /> and it is labelled that way on every other screen.
           </Note>
         </div>
       </section>
 
       {/* ---------- R7 · un solo instrumento, y el desacuerdo declarado ---------- */}
       <section className="card card-pad">
-        <SectionHeader kicker="R7 · instrumento único" title="Scorer canónico QN v2.4.2">
+        <SectionHeader kicker="R7 · single instrument" title="Canonical scorer QN v2.4.2">
           <button type="button" className="btn" onClick={() => setShowWarning((v) => !v)} aria-expanded={showWarning}>
-            {showWarning ? "Ocultar" : "Ver"} desacuerdo entre instrumentos
+            {showWarning ? "Hide" : "Show"} disagreement between instruments
           </button>
         </SectionHeader>
         <p className="text-sm text-ink-700">
-          Todas las cifras de esta pantalla vienen de {qm.instrument}. No se promedian instrumentos ni se
-          alterna entre ellos según convenga.
+          Every figure on this screen comes from {qm.instrument}. Instruments are never averaged together
+          and never swapped depending on which one looks better.
         </p>
         {showWarning ? (
           <div className="mt-3 space-y-3">
@@ -151,10 +151,10 @@ export function QualityModule() {
               <table className="w-full border-collapse">
                 <thead className="border-b border-ink-200 bg-ink-50">
                   <tr>
-                    <th className="th">Banda</th>
-                    <th className="th text-right">QN v2.4.2 (canónico)</th>
-                    <th className="th text-right">Regla binaria del xlsx</th>
-                    <th className="th text-right">Diferencia</th>
+                    <th className="th">Band</th>
+                    <th className="th text-right">QN v2.4.2 (canonical)</th>
+                    <th className="th text-right">Binary rule from the xlsx</th>
+                    <th className="th text-right">Difference</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-ink-100">
@@ -176,8 +176,8 @@ export function QualityModule() {
       {/* ---------- R8 · linea base posterior al quiebre ---------- */}
       <section className="card card-pad">
         <SectionHeader
-          kicker={`R8 · línea base ${qm.baseline_window[0]} → ${qm.baseline_window[1]} · actual ${qm.current_window[0]} → ${qm.current_window[1]}`}
-          title="Movimiento contra línea base"
+          kicker={`R8 · baseline ${qm.baseline_window[0]} → ${qm.baseline_window[1]} · current ${qm.current_window[0]} → ${qm.current_window[1]}`}
+          title="Movement against the baseline"
         />
         <Note tone="warn">{qm.break_note}</Note>
         <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -186,14 +186,14 @@ export function QualityModule() {
               <div className="label">{LABEL[b.key] ?? b.key}</div>
               <div className="mt-1 flex items-baseline gap-2">
                 <span className="num text-xl font-semibold text-pep-900">{b.current.toFixed(1)}</span>
-                <span className="subtle num">desde {b.baseline.toFixed(1)} {b.unit === "pts" ? "pts" : "%"}</span>
+                <span className="subtle num">from {b.baseline.toFixed(1)} {b.unit === "pts" ? "pts" : "%"}</span>
               </div>
               <div className="mt-1.5">
                 <Delta value={b.delta} direction={b.direccion_deseada} unit={b.unit} />
               </div>
               <p className="subtle mt-1.5">
-                Dirección deseada: {b.direccion_deseada === "up_is_good" ? "a la alza" : "a la baja"}. El color
-                lee la dirección, no el signo.
+                Desired direction: {b.direccion_deseada === "up_is_good" ? "upwards" : "downwards"}. The colour
+                reads the direction, not the sign.
               </p>
             </div>
           ))}
@@ -202,7 +202,7 @@ export function QualityModule() {
 
       {/* ---------- serie temporal ---------- */}
       <section className="card card-pad">
-        <SectionHeader kicker="Serie" title="Evolución de la calidad">
+        <SectionHeader kicker="Series" title="Quality over time">
           <div className="flex flex-wrap items-center gap-1">
             {GRANULARITIES.map((g) => (
               <button
@@ -233,8 +233,8 @@ export function QualityModule() {
         </div>
 
         <p className="subtle mb-2">
-          {active.hint} La barra clara es el volumen de incidentes del periodo: la tasa nunca se muestra sin su
-          denominador. La franja sombreada es la ventana de línea base, posterior al quiebre de práctica de 2025Q3.
+          {active.hint} The pale bar is the incident volume of the period: the rate is never shown without its
+          denominator. The shaded band is the baseline window, which starts after the 2025Q3 change of practice.
         </p>
 
         <QualitySeries
@@ -246,53 +246,54 @@ export function QualityModule() {
           unit={active.unit}
         />
         <p className="subtle mt-2 num">
-          {points.length} periodos en granularidad {GRANULARITIES.find((g) => g.key === gran)?.label.toLowerCase()}.
-          Los periodos con muy pocos incidentes se muestran tal cual, sin suavizado ni recorte.
+          {points.length} periods at {GRANULARITIES.find((g) => g.key === gran)?.label.toLowerCase()} granularity.
+          Periods with very few incidents are shown as they are, with no smoothing and no truncation.
         </p>
       </section>
 
       {/* ---------- ranking por AG ---------- */}
       <section className="card card-pad">
         <SectionHeader
-          kicker={`${quality.by_assignment_group.length} grupos con corpus elegible`}
-          title="Calidad por Assignment Group"
+          kicker={`${quality.by_assignment_group.length} groups with an eligible corpus`}
+          title="Quality by Assignment Group"
         >
           <label className="flex items-center gap-2 text-xs text-ink-700">
-            Mínimo de incidentes
+            Minimum incidents
             <select
               className="input w-28"
               value={minIncidents}
               onChange={(e) => setMinIncidents(Number(e.target.value))}
             >
               {[0, 100, 500, 1000, 5000].map((v) => (
-                <option key={v} value={v}>{v === 0 ? "sin filtro" : v.toLocaleString("es-MX")}</option>
+                <option key={v} value={v}>{v === 0 ? "no filter" : v.toLocaleString("en-US")}</option>
               ))}
             </select>
           </label>
         </SectionHeader>
 
         <Note>
-          Se listan los grupos con corpus elegible.{" "}
-          <InlineMetric resolved={agRows.length} universe={quality.by_assignment_group.length} /> pasan el mínimo
-          seleccionado. Los grupos sin corpus no se muestran aquí porque no tienen medición — no porque estén bien.
+          Only groups with an eligible corpus are listed.{" "}
+          <InlineMetric resolved={agRows.length} universe={quality.by_assignment_group.length} /> pass the selected
+          minimum. Groups without a corpus are absent here because they have no measurement — not because they
+          are doing well.
         </Note>
 
         <div className="mt-3 scroll-thin max-h-[520px] overflow-auto">
           <table className="w-full border-collapse">
             <TableCaption>
-              Cada tasa se calcula sobre la columna <span className="num">Incidentes</span> de su propia fila.
-              Los denominadores son distintos por grupo, así que las tasas se comparan pero no se promedian.
-              El score es del scorer {qm.instrument}, en puntos sobre 100.
+              Every rate is computed over the <span className="num">Incidents</span> column of its own row.
+              The denominators differ per group, so the rates can be compared but never averaged.
+              The score comes from {qm.instrument}, in points out of 100.
             </TableCaption>
             <thead className="sticky top-0 border-b border-ink-200 bg-ink-50">
               <tr>
                 <th className="th">Assignment Group</th>
                 {([
-                  ["incidents", "Incidentes"],
-                  ["diagnostic_rate", "Tasa diagnóstica"],
-                  ["has_root_rate", "Con causa raíz"],
-                  ["avg_score", "Score QN v2.4.2"],
-                  ["poor_rate", "Doc. pobre"],
+                  ["incidents", "Incidents"],
+                  ["diagnostic_rate", "Diagnostic rate"],
+                  ["has_root_rate", "With root cause"],
+                  ["avg_score", "QN v2.4.2 score"],
+                  ["poor_rate", "Poor docs"],
                 ] as [AgSortKey, string][]).map(([k, lbl]) => (
                   <th key={k} className="th text-right">
                     <button
@@ -304,7 +305,7 @@ export function QualityModule() {
                     </button>
                   </th>
                 ))}
-                <th className="th text-right">Apps que atiende</th>
+                <th className="th text-right">Apps it serves</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-ink-100">
@@ -313,13 +314,13 @@ export function QualityModule() {
                 return (
                   <tr key={r.ag_key} className="row-hover">
                     <td className="td font-medium">{r.name}</td>
-                    <td className="num td text-right">{r.incidents.toLocaleString("es-MX")}</td>
+                    <td className="num td text-right">{r.incidents.toLocaleString("en-US")}</td>
                     <td className="num td text-right">{r.diagnostic_rate.toFixed(1)}%</td>
                     <td className="num td text-right">{r.has_root_rate.toFixed(1)}%</td>
                     <td className="num td text-right">{r.avg_score.toFixed(1)}</td>
                     <td className="num td text-right">{r.poor_rate.toFixed(1)}%</td>
                     <td className="num td text-right text-ink-500">
-                      {g ? g.app_count : <span className="text-ink-400">sin unir al modelo</span>}
+                      {g ? g.app_count : <span className="text-ink-400">not joined to the model</span>}
                     </td>
                   </tr>
                 );
@@ -332,37 +333,37 @@ export function QualityModule() {
       {/* ---------- candidatos a SOP ---------- */}
       <section className="card card-pad">
         <SectionHeader
-          kicker={`${sopCandidates.rows.length} grupos cumplen los dos umbrales`}
-          title="Candidatos a SOP"
+          kicker={`${sopCandidates.rows.length} groups meet both thresholds`}
+          title="SOP candidates"
         />
         <Note>
-          Criterio declarado: volumen en el <span className="num">40%</span> superior
-          (≥ <span className="num">{sopCandidates.volCut.toLocaleString("es-MX")}</span> incidentes) y tasa
-          diagnóstica en el <span className="num">40%</span> inferior
-          (≤ <span className="num">{sopCandidates.diagCut.toFixed(1)}%</span>). Los dos cortes salen de la
-          distribución observada, no de un umbral elegido a mano. Alto volumen mal documentado es dónde un
-          procedimiento estándar rinde primero; no es una lista de culpables.
+          Declared criterion: volume in the top <span className="num">40%</span>
+          (≥ <span className="num">{sopCandidates.volCut.toLocaleString("en-US")}</span> incidents) and diagnostic
+          rate in the bottom <span className="num">40%</span>
+          (≤ <span className="num">{sopCandidates.diagCut.toFixed(1)}%</span>). Both cuts come from the observed
+          distribution, not from a threshold picked by hand. High volume that is poorly documented is where a
+          standard procedure pays off first; this is not a list of culprits.
         </Note>
         <div className="mt-3 scroll-thin max-h-[360px] overflow-auto">
           <table className="w-full border-collapse">
             <TableCaption>
-              Tasas sobre la columna <span className="num">Incidentes</span> de cada fila. La pertenencia a esta
-              lista se decide por los dos umbrales declarados arriba, no por el valor de una sola columna.
+              Rates over the <span className="num">Incidents</span> column of each row. Membership of this list
+              is decided by the two thresholds declared above, not by the value of a single column.
             </TableCaption>
             <thead className="sticky top-0 border-b border-ink-200 bg-ink-50">
               <tr>
                 <th className="th">Assignment Group</th>
-                <th className="th text-right">Incidentes</th>
-                <th className="th text-right">Tasa diagnóstica</th>
+                <th className="th text-right">Incidents</th>
+                <th className="th text-right">Diagnostic rate</th>
                 <th className="th text-right">Score</th>
-                <th className="th text-right">Doc. pobre</th>
+                <th className="th text-right">Poor docs</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-ink-100">
               {sopCandidates.rows.map((r) => (
                 <tr key={r.ag_key} className="row-hover">
                   <td className="td font-medium">{r.name}</td>
-                  <td className="num td text-right">{r.incidents.toLocaleString("es-MX")}</td>
+                  <td className="num td text-right">{r.incidents.toLocaleString("en-US")}</td>
                   <td className="num td text-right">{r.diagnostic_rate.toFixed(1)}%</td>
                   <td className="num td text-right">{r.avg_score.toFixed(1)}</td>
                   <td className="num td text-right">{r.poor_rate.toFixed(1)}%</td>
@@ -375,27 +376,27 @@ export function QualityModule() {
 
       {/* ---------- decalogo ---------- */}
       <section className="card card-pad">
-        <SectionHeader kicker={`Cobertura ${qm.decalogue_coverage_pct.toFixed(1)}% del corpus`} title="Decálogo" />
+        <SectionHeader kicker={`Covers ${qm.decalogue_coverage_pct.toFixed(1)}% of the corpus`} title="Decalogue" />
         <Note tone="warn">
-          Solo <span className="num font-semibold">{qm.decalogue_coverage_pct.toFixed(1)}%</span> de los incidentes
-          elegibles trae código del Decálogo. La categoría <span className="num">Sin código</span> se muestra en la
-          gráfica en lugar de excluirse: es la categoría más grande y esconderla haría ver la clasificación mejor
-          de lo que está.
+          Only <span className="num font-semibold">{qm.decalogue_coverage_pct.toFixed(1)}%</span> of the eligible
+          incidents carry a Decalogue code. The <span className="num">No code</span> category is drawn in the chart
+          instead of being excluded: it is the largest category, and hiding it would make the classification look
+          better than it is.
         </Note>
         <div className="mt-3 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
           <DecalogueChart rows={quality.by_decalogue} />
           <div className="scroll-thin max-h-[280px] overflow-auto">
             <table className="w-full border-collapse">
               <TableCaption>
-                Tasas sobre la columna <span className="num">Incidentes</span> de cada código. La suma de la
-                columna es el corpus elegible, {qm.eligible.toLocaleString("es-MX")} incidentes.
+                Rates over the <span className="num">Incidents</span> column of each code. The column adds up to
+                the eligible corpus, {qm.eligible.toLocaleString("en-US")} incidents.
               </TableCaption>
               <thead className="sticky top-0 border-b border-ink-200 bg-ink-50">
                 <tr>
-                  <th className="th">Código</th>
-                  <th className="th text-right">Incidentes</th>
+                  <th className="th">Code</th>
+                  <th className="th text-right">Incidents</th>
                   <th className="th text-right">Score</th>
-                  <th className="th text-right">Tasa diagnóstica</th>
+                  <th className="th text-right">Diagnostic rate</th>
                   <th className="th text-right">AGs</th>
                 </tr>
               </thead>
@@ -403,10 +404,10 @@ export function QualityModule() {
                 {quality.by_decalogue.map((d) => (
                   <tr key={d.dcode} className="row-hover">
                     <td className="td font-medium">{d.dcode}</td>
-                    <td className="num td text-right">{d.incidents.toLocaleString("es-MX")}</td>
+                    <td className="num td text-right">{d.incidents.toLocaleString("en-US")}</td>
                     <td className="num td text-right">{d.avg_score.toFixed(1)}</td>
                     <td className="num td text-right">{d.diagnostic_rate.toFixed(1)}%</td>
-                    <td className="num td text-right">{d.ags.toLocaleString("es-MX")}</td>
+                    <td className="num td text-right">{d.ags.toLocaleString("en-US")}</td>
                   </tr>
                 ))}
               </tbody>
@@ -417,27 +418,27 @@ export function QualityModule() {
 
       {/* ---------- patrones recurrentes ---------- */}
       <section className="card card-pad">
-        <SectionHeader kicker={`${patterns.length} firmas recurrentes`} title="Patrones repetidos" />
+        <SectionHeader kicker={`${patterns.length} recurring signatures`} title="Repeated patterns" />
         <Note>
-          Firmas normalizadas del texto de incidentes. Una firma con muchos incidentes concentrada en un solo AG
-          es trabajo repetido con dueño claro; repartida entre muchos AGs, es un síntoma compartido sin dueño.
-          La firma es una derivación de texto libre, no un campo capturado.{" "}
+          Normalized signatures of the incident text. A signature with many incidents concentrated in a single AG
+          is repeated work with a clear owner; spread across many AGs, it is a shared symptom with no owner.
+          The signature is a derivation from free text, not a captured field.{" "}
           <EvidenceBadge tier="E3" showAuthority />
         </Note>
         <div className="mt-3 scroll-thin max-h-[420px] overflow-auto">
           <table className="w-full border-collapse">
             <TableCaption>
-              La tasa diagnóstica de cada fila se calcula sobre la columna <span className="num">Incidentes</span>
-              {" "}de esa firma, no sobre el corpus completo.
+              The diagnostic rate of each row is computed over the <span className="num">Incidents</span> column
+              {" "}of that signature, not over the whole corpus.
             </TableCaption>
             <thead className="sticky top-0 border-b border-ink-200 bg-ink-50">
               <tr>
-                <th className="th">Firma</th>
-                <th className="th text-right">Incidentes</th>
+                <th className="th">Signature</th>
+                <th className="th text-right">Incidents</th>
                 <th className="th text-right">AGs</th>
-                <th className="th">AG principal</th>
-                <th className="th text-right">Tasa diagnóstica</th>
-                <th className="th">Visto</th>
+                <th className="th">Top AG</th>
+                <th className="th text-right">Diagnostic rate</th>
+                <th className="th">Seen</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-ink-100">
@@ -447,7 +448,7 @@ export function QualityModule() {
                     <div className="font-medium">{p.sig}</div>
                     <div className="subtle num truncate">{p.example}</div>
                   </td>
-                  <td className="num td text-right">{p.incidents.toLocaleString("es-MX")}</td>
+                  <td className="num td text-right">{p.incidents.toLocaleString("en-US")}</td>
                   <td className="num td text-right">{p.ags}</td>
                   <td className="td max-w-[220px] truncate text-xs text-ink-600">{p.top_ag}</td>
                   <td className="num td text-right">{p.diagnostic_rate.toFixed(1)}%</td>
@@ -459,16 +460,16 @@ export function QualityModule() {
         </div>
         {patternLimit < patterns.length ? (
           <button type="button" className="btn mt-3" onClick={() => setPatternLimit(patterns.length)}>
-            Ver las {patterns.length} firmas
+            Show all {patterns.length} signatures
           </button>
         ) : (
-          <p className="subtle mt-2">Se muestran las {patterns.length} firmas, sin recorte.</p>
+          <p className="subtle mt-2">All {patterns.length} signatures are shown, with no truncation.</p>
         )}
       </section>
 
       <p className="subtle">
-        Corte del corpus {qm.as_of} · corte del modelo {meta.as_of} · universo de aplicaciones{" "}
-        <span className="num">{UNIVERSE}</span> · plataformas <span className="num">{platforms.length}</span>.
+        Corpus cut-off {qm.as_of} · model cut-off {meta.as_of} · application universe{" "}
+        <span className="num">{UNIVERSE}</span> · platforms <span className="num">{platforms.length}</span>.
       </p>
     </div>
   );

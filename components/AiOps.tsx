@@ -30,10 +30,10 @@ export function AiOps() {
   }));
 
   const unrouted = useMemo(
-    () => aiApps.filter((a) => a.ags.length === 0).sort((a, b) => a.name.localeCompare(b.name, "es")),
+    () => aiApps.filter((a) => a.ags.length === 0).sort((a, b) => a.name.localeCompare(b.name, "en")),
     [],
   );
-  const shown = onlyUnrouted ? unrouted : [...aiApps].sort((a, b) => a.name.localeCompare(b.name, "es"));
+  const shown = onlyUnrouted ? unrouted : [...aiApps].sort((a, b) => a.name.localeCompare(b.name, "en"));
 
   const aiAgNames = useMemo(() => {
     const s = new Set<string>();
@@ -52,55 +52,55 @@ export function AiOps() {
           <AiTag />
         </div>
         <p className="mt-1 max-w-3xl text-sm text-ink-700">
-          El segmento AI/ML del portafolio, medido con los mismos cuatro eslabones que el resto. La brecha con el
-          portafolio completo es el mensaje de esta pantalla, no un defecto que haya que suavizar.
+          The AI/ML segment of the portfolio, measured with the same four links as everything else. The gap
+          against the full portfolio is the message of this screen, not a flaw to be smoothed over.
         </p>
       </header>
 
       {/* ---------- las cuatro cifras de cabecera, cada una con su denominador ---------- */}
       <section className="card card-pad">
-        <SectionHeader kicker={`Cluster 06 · ${aiApps.length} aplicaciones AI/ML`} title="Cobertura del segmento" />
+        <SectionHeader kicker={`Cluster 06 · ${aiApps.length} AI/ML applications`} title="Segment coverage" />
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          <Metric label="Aplicaciones AI/ML" resolved={aiApps.length} universe={UNIVERSE} unitLabel="del portafolio" />
-          <Metric label="Con Assignment Group" resolved={aiGaps.routable} universe={aiApps.length} unitLabel="ruteables" tone="gap" />
-          <Metric label="Con DPM declarado" resolved={aiGaps.owned} universe={aiApps.length} unitLabel="con dueño" />
-          <Metric label="Con plataforma identificada" resolved={aiGaps.platformKnown} universe={aiApps.length} unitLabel="ubicadas" tone="gap" />
+          <Metric label="AI/ML applications" resolved={aiApps.length} universe={UNIVERSE} unitLabel="of the portfolio" />
+          <Metric label="With an Assignment Group" resolved={aiGaps.routable} universe={aiApps.length} unitLabel="routable" tone="gap" />
+          <Metric label="With a declared DPM" resolved={aiGaps.owned} universe={aiApps.length} unitLabel="owned" />
+          <Metric label="With an identified platform" resolved={aiGaps.platformKnown} universe={aiApps.length} unitLabel="located" tone="gap" />
         </div>
         <Note tone="warn" >
           <span className="mt-3 block">
-            {meta.ai_ops.note} Con el dato a la vista: el ruteo del segmento está en{" "}
-            <InlineMetric resolved={aiGaps.routable} universe={aiApps.length} /> contra{" "}
-            <InlineMetric resolved={allGaps.routable} universe={allGaps.universe} /> del portafolio completo, una
-            diferencia de{" "}
+            {meta.ai_ops.note} With the figures in view: routing coverage for the segment stands at{" "}
+            <InlineMetric resolved={aiGaps.routable} universe={aiApps.length} /> against{" "}
+            <InlineMetric resolved={allGaps.routable} universe={allGaps.universe} /> for the full portfolio, a
+            difference of{" "}
             <span className="num font-semibold">
               {((aiGaps.routable / aiApps.length - allGaps.routable / allGaps.universe) * 100).toFixed(1)} pp
             </span>
-            . Las dos cifras se muestran con su propio denominador porque los universos son distintos y no son
-            comparables como conteos.
+            . Both figures carry their own denominator because the universes differ and are not comparable as
+            counts.
           </span>
         </Note>
       </section>
 
       {/* ---------- comparativo por eslabon ---------- */}
       <section className="card card-pad">
-        <SectionHeader kicker="Los cuatro eslabones" title="AI/ML contra el portafolio completo" />
+        <SectionHeader kicker="The four links" title="AI/ML against the full portfolio" />
         <p className="subtle mb-3">
-          Cada barra es una proporción sobre su propio universo: {aiApps.length} aplicaciones AI/ML frente a{" "}
-          {UNIVERSE} del portafolio. Nunca se restan ni se suman entre sí.
+          Each bar is a proportion over its own universe: {aiApps.length} AI/ML applications against{" "}
+          {UNIVERSE} in the portfolio. They are never added to nor subtracted from one another.
         </p>
         <CoverageCompareChart rows={chartRows} />
         <div className="mt-3 scroll-thin overflow-x-auto">
           <table className="w-full border-collapse">
             <TableCaption>
-              Dos universos distintos por fila: {aiApps.length} aplicaciones AI/ML y {UNIVERSE} del portafolio.
-              La diferencia está en puntos porcentuales entre las dos proporciones y no es un conteo.
+              Two different universes per row: {aiApps.length} AI/ML applications and {UNIVERSE} in the
+              portfolio. The difference is in percentage points between the two proportions, not a count.
             </TableCaption>
             <thead className="border-b border-ink-200 bg-ink-50">
               <tr>
-                <th className="th">Eslabón</th>
+                <th className="th">Link</th>
                 <th className="th">AI/ML</th>
-                <th className="th">Portafolio completo</th>
-                <th className="th text-right">Diferencia</th>
+                <th className="th">Full portfolio</th>
+                <th className="th text-right">Difference</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-ink-100">
@@ -119,39 +119,39 @@ export function AiOps() {
           </table>
         </div>
         <p className="subtle mt-2">
-          La diferencia se expresa en puntos porcentuales entre dos proporciones de distinto universo. No es un
-          conteo y no se puede sumar a nada.
+          The difference is expressed in percentage points between two proportions with different universes. It
+          is not a count and cannot be added to anything.
         </p>
       </section>
 
       {/* ---------- pila tecnologica ---------- */}
       <section className="card card-pad">
         <SectionHeader
-          kicker={`${aiPlatforms.length} plataformas marcadas como AI · ${aiTechStack.length} plataformas con al menos una app AI/ML`}
-          title="Pila tecnológica del segmento"
+          kicker={`${aiPlatforms.length} platforms flagged as AI · ${aiTechStack.length} platforms with at least one AI/ML app`}
+          title="Technology stack of the segment"
         >
           <EvidenceBadge tier="E2" showAuthority />
         </SectionHeader>
         <Note>
-          Una aplicación AI/ML puede correr sobre plataformas que no son de AI, y una plataforma de AI puede
-          alojar aplicaciones que no lo son. Se listan las dos cosas por separado en lugar de fundirlas.{" "}
-          <InlineMetric resolved={aiGaps.platformKnown} universe={aiApps.length} /> de las aplicaciones AI/ML
-          tienen plataforma identificada, así que esta pila describe solo a esas.
+          An AI/ML application can run on platforms that are not AI platforms, and an AI platform can host
+          applications that are not AI/ML. Both are listed separately instead of being merged.{" "}
+          <InlineMetric resolved={aiGaps.platformKnown} universe={aiApps.length} /> of the AI/ML applications have
+          an identified platform, so this stack describes only those.
         </Note>
         <div className="mt-3 scroll-thin overflow-x-auto">
           <table className="w-full border-collapse">
             <TableCaption>
-              «Ruteables» es la proporción de las apps de esa plataforma con Assignment Group: el denominador es
-              la columna <span className="num">Apps totales</span> de la misma fila, no el portafolio.
+              “Routable” is the share of that platform’s apps that have an Assignment Group: the denominator is
+              the <span className="num">Total apps</span> column of the same row, not the portfolio.
             </TableCaption>
             <thead className="border-b border-ink-200 bg-ink-50">
               <tr>
-                <th className="th">Plataforma</th>
+                <th className="th">Platform</th>
                 <th className="th">Tier</th>
-                <th className="th text-right">Apps AI/ML</th>
-                <th className="th text-right">Apps totales</th>
-                <th className="th text-right">Ruteables</th>
-                <th className="th">Marcas</th>
+                <th className="th text-right">AI/ML apps</th>
+                <th className="th text-right">Total apps</th>
+                <th className="th text-right">Routable</th>
+                <th className="th">Flags</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-ink-100">
@@ -177,63 +177,64 @@ export function AiOps() {
 
       {/* ---------- criticidad ---------- */}
       <section className="card card-pad">
-        <SectionHeader kicker="Criticidad declarada" title="Qué tan crítico es el segmento — y cuánto no se sabe" />
+        <SectionHeader kicker="Declared criticality" title="How critical the segment is — and how much is unknown" />
         <div className="grid gap-4 sm:grid-cols-4">
           {critMix.map(({ c, n }) => (
             <div key={c} className="rounded border border-ink-200 p-3">
               <CriticalityChip value={c} withLabel />
               <div className="num mt-1.5 text-xl font-semibold text-pep-900">{n}</div>
-              <div className="subtle num">de {aiApps.length} · {((n / aiApps.length) * 100).toFixed(1)}%</div>
+              <div className="subtle num">of {aiApps.length} · {((n / aiApps.length) * 100).toFixed(1)}%</div>
             </div>
           ))}
         </div>
         <Note tone="warn">
           <span className="mt-3 block">
-            <InlineMetric resolved={aiGaps.withoutCriticality} universe={aiApps.length} /> de las aplicaciones
-            AI/ML no tienen criticidad declarada. No se imputa ninguna: una aplicación sin criticidad pesa cero en
-            cualquier agregado ponderado, y eso no significa que no importe, significa que no se ha clasificado.
+            <InlineMetric resolved={aiGaps.withoutCriticality} universe={aiApps.length} /> of the AI/ML
+            applications have no declared criticality. None is imputed: an application without criticality weighs
+            zero in any weighted aggregate, and that does not mean it does not matter — it means it has not been
+            classified.
           </span>
         </Note>
       </section>
 
       {/* ---------- calidad aproximada del segmento ---------- */}
       <section className="card card-pad">
-        <SectionHeader kicker="Calidad de work notes" title="Los grupos que atienden al segmento AI/ML">
-          <ApproxTag>se mide por AG, no por aplicación</ApproxTag>
+        <SectionHeader kicker="Work notes quality" title="The groups that serve the AI/ML segment">
+          <ApproxTag>measured per AG, not per application</ApproxTag>
         </SectionHeader>
         <Note tone="warn">
-          El segmento toca <span className="num font-semibold">{aiAgNames.length}</span> Assignment Groups
-          distintos, de los cuales <InlineMetric resolved={q.measured} universe={aiAgNames.length} /> tienen corpus
-          elegible. Estas cifras describen a esos grupos, que también atienden aplicaciones fuera del segmento; no
-          son la calidad de las aplicaciones AI/ML. En todo el modelo solo{" "}
+          The segment touches <span className="num font-semibold">{aiAgNames.length}</span> distinct Assignment
+          Groups, of which <InlineMetric resolved={q.measured} universe={aiAgNames.length} /> have an eligible
+          corpus. These figures describe those groups, which also serve applications outside the segment; they are
+          not the quality of the AI/ML applications. Across the whole model only{" "}
           <InlineMetric
             resolved={quality.meta.join_coverage.ags_matched}
             universe={quality.meta.join_coverage.ags_bridge}
           />{" "}
-          de las claves de grupo se pudieron unir al corpus de calidad.
+          of the group keys could be joined to the quality corpus.
         </Note>
         {q.measured === 0 ? (
           <p className="mt-3 text-sm text-ink-600">
-            Ninguno de los grupos que atienden al segmento alcanza el umbral de elegibilidad. No hay medición y no
-            se sustituye por el promedio del portafolio.
+            None of the groups serving the segment reaches the eligibility threshold. There is no measurement and
+            it is not replaced by the portfolio average.
           </p>
         ) : (
           <div className="mt-3 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            <Metric compact label="AGs con medición" resolved={q.measured} universe={aiAgNames.length} unitLabel="AGs del segmento" />
+            <Metric compact label="AGs with a measurement" resolved={q.measured} universe={aiAgNames.length} unitLabel="AGs of the segment" />
             <div>
-              <div className="label">Tasa diagnóstica ponderada</div>
+              <div className="label">Weighted diagnostic rate</div>
               <div className="num text-lg font-semibold text-pep-900">{q.diagnostic_rate?.toFixed(1)}%</div>
-              <div className="subtle num mt-0.5">sobre {q.incidents.toLocaleString("es-MX")} incidentes</div>
+              <div className="subtle num mt-0.5">over {q.incidents.toLocaleString("en-US")} incidents</div>
             </div>
             <div>
-              <div className="label">Con causa raíz</div>
+              <div className="label">With root cause</div>
               <div className="num text-lg font-semibold text-pep-900">{q.has_root_rate?.toFixed(1)}%</div>
-              <div className="subtle num mt-0.5">sobre {q.incidents.toLocaleString("es-MX")} incidentes</div>
+              <div className="subtle num mt-0.5">over {q.incidents.toLocaleString("en-US")} incidents</div>
             </div>
             <div>
-              <div className="label">Documentación pobre</div>
+              <div className="label">Poor documentation</div>
               <div className="num text-lg font-semibold text-pep-900">{q.poor_rate?.toFixed(1)}%</div>
-              <div className="subtle num mt-0.5">sobre {q.incidents.toLocaleString("es-MX")} incidentes</div>
+              <div className="subtle num mt-0.5">over {q.incidents.toLocaleString("en-US")} incidents</div>
             </div>
           </div>
         )}
@@ -242,15 +243,15 @@ export function AiOps() {
       {/* ---------- la lista que no se filtra ---------- */}
       <section className="card card-pad">
         <SectionHeader
-          kicker={`${shown.length} aplicaciones listadas`}
-          title={onlyUnrouted ? "Aplicaciones AI/ML sin ruta de respuesta declarada" : "Todas las aplicaciones AI/ML"}
+          kicker={`${shown.length} applications listed`}
+          title={onlyUnrouted ? "AI/ML applications with no declared response route" : "All AI/ML applications"}
         >
           <div className="flex items-center gap-1">
             <button type="button" className={`btn ${onlyUnrouted ? "btn-active" : ""}`} onClick={() => setOnlyUnrouted(true)} aria-pressed={onlyUnrouted}>
-              Sin AG <span className="num opacity-70">{unrouted.length}</span>
+              No AG <span className="num opacity-70">{unrouted.length}</span>
             </button>
             <button type="button" className={`btn ${!onlyUnrouted ? "btn-active" : ""}`} onClick={() => setOnlyUnrouted(false)} aria-pressed={!onlyUnrouted}>
-              Todas <span className="num opacity-70">{aiApps.length}</span>
+              All <span className="num opacity-70">{aiApps.length}</span>
             </button>
           </div>
         </SectionHeader>
@@ -258,14 +259,14 @@ export function AiOps() {
         <Note tone={onlyUnrouted ? "warn" : "neutral"}>
           {onlyUnrouted ? (
             <>
-              <InlineMetric resolved={unrouted.length} universe={aiApps.length} /> de las aplicaciones AI/ML no
-              tienen Assignment Group. Un incidente sobre cualquiera de ellas no encuentra destino. La lista se
-              publica completa: no se ocultan las que además no tienen DPM ni plataforma.
+              <InlineMetric resolved={unrouted.length} universe={aiApps.length} /> of the AI/ML applications have
+              no Assignment Group. An incident on any of them finds no destination. The list is published in full:
+              the ones that additionally have no DPM and no platform are not hidden.
             </>
           ) : (
             <>
-              El segmento completo, incluidas las que no tienen ruta, dueño ni plataforma. Ninguna fila se
-              excluye por estar incompleta.
+              The whole segment, including the applications with no route, no owner and no platform. No row is
+              excluded for being incomplete.
             </>
           )}
         </Note>
@@ -274,11 +275,11 @@ export function AiOps() {
           <table className="w-full border-collapse">
             <thead className="sticky top-0 border-b border-ink-200 bg-ink-50">
               <tr>
-                <th className="th">Aplicación</th>
-                <th className="th">Criticidad</th>
-                <th className="th">Proceso</th>
+                <th className="th">Application</th>
+                <th className="th">Criticality</th>
+                <th className="th">Process</th>
                 <th className="th">DPM</th>
-                <th className="th text-right">Plataformas</th>
+                <th className="th text-right">Platforms</th>
                 <th className="th text-right">Assignment Groups</th>
               </tr>
             </thead>
@@ -305,8 +306,8 @@ export function AiOps() {
       </section>
 
       <p className="subtle">
-        Corte {meta.as_of}. El segmento AI/ML se identifica por la marca del inventario, no por inferencia sobre
-        el nombre de la aplicación.
+        Cut-off {meta.as_of}. The AI/ML segment is identified by the inventory flag, not by inferring anything
+        from the application name.
       </p>
     </div>
   );

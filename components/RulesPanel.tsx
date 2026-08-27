@@ -3,8 +3,8 @@ import { useEffect, useState } from "react";
 import { meta, quality, coverage } from "@/lib/data";
 import { EvidenceBadge } from "./EvidenceBadge";
 
-/** Panel "Cómo leer esto". Vive en el layout, por lo tanto es accesible
- *  desde las cinco pantallas. Muestra meta.rules y meta.evidence_tiers. */
+/** "How to read this" panel. It lives in the layout, so it is reachable from
+ *  every screen. Renders meta.rules and meta.evidence_tiers. */
 export function RulesPanel() {
   const [open, setOpen] = useState(false);
 
@@ -21,7 +21,7 @@ export function RulesPanel() {
   return (
     <>
       <button type="button" onClick={() => setOpen(true)} className="btn shrink-0">
-        Cómo leer esto
+        How to read this
       </button>
 
       {open ? (
@@ -32,32 +32,32 @@ export function RulesPanel() {
           >
             <header className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-ink-200 bg-pep-900 px-6 py-4 text-white">
               <div>
-                <h2 className="text-lg font-semibold">Cómo leer esto</h2>
+                <h2 className="text-lg font-semibold">How to read this</h2>
                 <p className="mt-0.5 text-xs text-pep-100">
-                  El contrato del modelo. Corte {meta.as_of} · fuente {meta.source_file}
+                  The model contract. Cut-off {meta.as_of} · source {meta.source_file}
                 </p>
               </div>
               <button type="button" onClick={() => setOpen(false)}
                 className="btn shrink-0 border-white/30 bg-white/10 text-white hover:bg-white/20">
-                Cerrar
+                Close
               </button>
             </header>
 
             <div className="space-y-6 px-6 py-5">
               <section>
-                <h3 className="label mb-2">Alcance declarado</h3>
+                <h3 className="label mb-2">Declared scope</h3>
                 <p className="text-sm leading-relaxed text-ink-700">{meta.scope_note}</p>
                 <ul className="mt-2 space-y-1">
                   {meta.out_of_scope.map((s) => (
                     <li key={s} className="flex gap-2 text-sm text-ink-600">
-                      <span className="shrink-0 text-ink-400">Fuera de v1:</span><span>{s}</span>
+                      <span className="shrink-0 text-ink-400">Out of v1:</span><span>{s}</span>
                     </li>
                   ))}
                 </ul>
               </section>
 
               <section>
-                <h3 className="label mb-2">Reglas del modelo</h3>
+                <h3 className="label mb-2">Model rules</h3>
                 <ol className="space-y-2.5">
                   {meta.rules.map((r) => (
                     <li key={r.id} className="card card-pad">
@@ -77,7 +77,7 @@ export function RulesPanel() {
               </section>
 
               <section>
-                <h3 className="label mb-2">Niveles de evidencia</h3>
+                <h3 className="label mb-2">Evidence tiers</h3>
                 <ul className="space-y-2">
                   {Object.entries(meta.evidence_tiers).map(([t, d]) => (
                     <li key={t} className="flex items-start gap-2 text-sm text-ink-700">
@@ -86,13 +86,13 @@ export function RulesPanel() {
                   ))}
                 </ul>
                 <p className="subtle mt-2">
-                  Cobertura por eslabón:{" "}
+                  Coverage per link:{" "}
                   {coverage.map((c) => `${c.id} ${c.evidence_tier}`).join(" · ")}
                 </p>
               </section>
 
               <section>
-                <h3 className="label mb-2">Escala de criticidad</h3>
+                <h3 className="label mb-2">Criticality scale</h3>
                 <ul className="space-y-1.5">
                   {Object.entries(meta.criticality_scale).map(([k, v]) => (
                     <li key={k} className="text-sm text-ink-700">
@@ -105,17 +105,17 @@ export function RulesPanel() {
               </section>
 
               <section>
-                <h3 className="label mb-2">Derivación declarada</h3>
+                <h3 className="label mb-2">Declared derivation</h3>
                 <p className="text-sm leading-relaxed text-ink-700">{meta.derivation_warning}</p>
               </section>
 
               <section>
-                <h3 className="label mb-2">Instrumento de calidad</h3>
+                <h3 className="label mb-2">Quality instrument</h3>
                 <p className="text-sm leading-relaxed text-ink-700">{quality.meta.instrument_warning}</p>
               </section>
 
               <section>
-                <h3 className="label mb-2">Hallazgos del propio catálogo</h3>
+                <h3 className="label mb-2">Findings in the catalogue itself</h3>
                 <ul className="space-y-2">
                   {meta.data_quality_notes.map((n) => (
                     <li key={n.id} className="card card-pad">

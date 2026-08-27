@@ -243,16 +243,39 @@ ag_count_gap = sum(
 )
 
 # ------------------------------------------------------------------ cobertura
+# La interfaz se publica en ingles. Las etiquetas narrativas de la hoja vienen en
+# espanol, asi que se traducen con un diccionario explicito: si aparece una
+# etiqueta nueva se conserva el original en lugar de perderla en silencio.
+LINK_EN = {
+    "Plataforma \u2192 Aplicaci\u00f3n": "Platform \u2192 Application",
+    "Aplicaci\u00f3n \u2192 Assignment Group": "Application \u2192 Assignment Group",
+    "Aplicaci\u00f3n \u2192 DPM sin TBD": "Application \u2192 DPM without TBD",
+    "Aplicaci\u00f3n \u2192 Proceso y Sector": "Application \u2192 Process and Sector",
+}
+SOURCE_EN = {
+    "Tech Buckets feb 2026 (E2) + Technology Stack del inventario Margarita "
+    "(E3, derivado de texto libre)":
+        "Tech Buckets Feb 2026 (E2) + Technology Stack from the Margarita inventory "
+        "(E3, derived from free text)",
+    "Hoja 12 ago 2026 + inventario Margarita":
+        "Sheet 12 Aug 2026 + Margarita inventory",
+    "Hoja 12 + DPM NAME y DPM L3 del inventario Margarita":
+        "Sheet 12 + DPM NAME and DPM L3 from the Margarita inventory",
+    "Inventory 479 + Sector SNOW del inventario Margarita":
+        "Inventory 479 + Sector SNOW from the Margarita inventory",
+}
+
 coverage = []
 for c in rows("09_COVERAGE", skip=2):
     resolved, universe = num(c["resolved"]), num(c["universe"])
     coverage.append({
-        "id": s(c["id"]), "link": s(c["link"]),
+        "id": s(c["id"]), "link": LINK_EN.get(s(c["link"]), s(c["link"])),
         "resolved": resolved, "universe": universe,
         "coverage_pct": round(100 * resolved / universe, 1),
         "gap": universe - resolved,
         "evidence_tier": s(c["evidence_tier"]),
-        "owner": s(c["owner"]), "source": s(c["source"]),
+        "owner": s(c["owner"]),
+        "source": SOURCE_EN.get(s(c["source"]), s(c["source"])),
     })
 
 # L1 mezcla dos autoridades; el desglose se calcula desde las filas.
@@ -262,10 +285,14 @@ for c in coverage:
     if c["id"] == "L1":
         c["breakdown"] = [
             {"evidence_tier": "E2", "resolved": l1_e2,
-             "source": "Analisis de Tech Buckets · Impact_Lineage_Matrix"},
+             "source": "Tech Buckets analysis · Impact_Lineage_Matrix"},
             {"evidence_tier": "E3", "resolved": l1_e3,
-             "source": "Normalizacion por palabra clave del campo libre Technology Stack"},
+             "source": "Keyword normalization of the free-text Technology Stack field"},
         ]
+
+# La unica etiqueta de Decalogo que no viene en ingles es la categoria residual.
+# Se traduce explicitamente y NO se excluye: es la mas grande del corpus.
+DCODE_EN = {"Sin c\u00f3digo": "No code", "Sin codigo": "No code"}
 
 # -------------------------------------------------------------------- calidad
 DIRECTION = {"sube": "up_is_good", "baja": "down_is_good"}
@@ -301,31 +328,32 @@ quality = {
         "universe_raw": 277408,
         "eligible": 242706,
         "eligible_pct": 87.5,
-        "eligibility_rule": "State en (Closed, Resolved) Y Close Code fuera de "
+        "eligibility_rule": "State in (Closed, Resolved) AND Close Code not in "
                             "(Cancelled, Incident Withdrawn, Became a Request, Not Solved)",
-        "eligibility_effect": "Excluir los no elegibles mueve la banda Excellent de 36.6% a 41.8%, "
-                              "es decir 5.2 puntos. La decision de denominador queda escrita antes "
-                              "de fijar la linea base.",
-        "instrument": "Scorer QN v2.4.2 · canonico",
-        "instrument_warning": "El archivo incidentes_clasificados.xlsx (279 incidentes) usa una funcion "
-                              "de puntaje distinta que depende de un VLOOKUP a una ruta local. Aplicando "
-                              "su misma regla binaria al corpus grande los promedios difieren: Alta 84.5 "
-                              "vs 88.5, Media 63.2 vs 44.3, Baja 40.7 vs 3.1. Los dos instrumentos no "
-                              "estan calibrados y el desacuerdo se concentra en la banda baja, que es "
-                              "justo donde se medira la mejora.",
+        "eligibility_effect": "Excluding the non-eligible records moves the Excellent band from 36.6% "
+                              "to 41.8%, that is 5.2 points. The denominator decision is written down "
+                              "before the baseline is fixed, not after.",
+        "instrument": "QN v2.4.2 scorer · canonical",
+        "instrument_warning": "The file incidentes_clasificados.xlsx (279 incidents) uses a different "
+                              "scoring function that depends on a VLOOKUP to a local path. Applying its "
+                              "own binary rule to the large corpus, the averages disagree: High 84.5 vs "
+                              "88.5, Medium 63.2 vs 44.3, Low 40.7 vs 3.1. The two instruments are not "
+                              "calibrated against each other and the disagreement concentrates in the "
+                              "low band, which is exactly where improvement will be measured.",
         "band_divergence": [
-            {"band": "Alta", "qn_v242": 84.5, "binary_xlsx": 88.5},
-            {"band": "Media", "qn_v242": 63.2, "binary_xlsx": 44.3},
-            {"band": "Baja", "qn_v242": 40.7, "binary_xlsx": 3.1},
+            {"band": "High", "qn_v242": 84.5, "binary_xlsx": 88.5},
+            {"band": "Medium", "qn_v242": 63.2, "binary_xlsx": 44.3},
+            {"band": "Low", "qn_v242": 40.7, "binary_xlsx": 3.1},
         ],
         "quality_rule": "has_root = Root Cause > 0 · has_res = Resolution Docs > 0 · "
-                        "Alta = ambos · Media = uno · Baja = ninguno",
-        "break_note": "La tasa diagnostica pasa de 6.6% en 2025Q2 a 31.4% en 2025Q3, lo cual refleja "
-                      "un cambio de practica interno. Una linea base anterior a ese quiebre mediria ese "
-                      "cambio y no el desempeno del proveedor.",
+                        "High = both · Medium = one · Low = neither",
+        "break_note": "The diagnostic rate jumps from 6.6% in 2025Q2 to 31.4% in 2025Q3, which reflects "
+                      "an internal change of practice. A baseline starting before that break would "
+                      "measure the change of practice and not the vendor's performance.",
         "decalogue_coverage_pct": 23.0,
-        "join_note": "La calidad se mide por Assignment Group, no por Business Application. La calidad "
-                     "de una aplicacion es por lo tanto una aproximacion via sus AGs y se etiqueta asi.",
+        "join_note": "Quality is measured per Assignment Group, not per Business Application. The quality "
+                     "of an application is therefore an approximation through its AGs, and it is labelled "
+                     "as such.",
         "baseline_window": ["2025-08-01", "2026-01-31"],
         "current_window": ["2026-02-01", "2026-08-12"],
     },
@@ -346,7 +374,7 @@ quality = {
         "poor_rate": num(r["poor_rate"]),
     } for r in rows("13_QUALITY_BY_AG")],
     "by_decalogue": [{
-        "dcode": s(r["dcode"]), "incidents": num(r["incidents"]),
+        "dcode": DCODE_EN.get(s(r["dcode"]), s(r["dcode"])), "incidents": num(r["incidents"]),
         "avg_score": num(r["avg_score"]), "diagnostic_rate": num(r["diagnostic_rate"]),
         "ags": num(r["ags"]),
     } for r in rows("14_QUALITY_BY_DECALOGUE")],
@@ -422,6 +450,24 @@ measures = [{
     "evidence_tier": s(m["evidence_tier"]), "status": s(m["estado"]), "note": s(m["nota"]),
 } for m in rows("08_MEASURES")]
 
+# DQ3 · La hoja usa tres grafias distintas para el mismo no-valor. Se cuentan
+# desde las filas y se declaran; la interfaz las trata a las tres como TBD, pero
+# la compuerta Atribuible se conserva tal como la declara la hoja.
+PLACEHOLDERS = ("TBD", "Por confirmar", "not stated")
+placeholder_counts = {}
+for _f in ("process", "sector"):
+    for _a in applications:
+        _v = (_a[_f] or "").strip()
+        if _v in PLACEHOLDERS:
+            placeholder_counts[f"{_f} = {_v}"] = placeholder_counts.get(f"{_f} = {_v}", 0) + 1
+# Solo las grafias distintas de "TBD": son las que antes se leian como un valor.
+ALIASES = ("Por confirmar", "not stated")
+placeholder_apps = [
+    a for a in applications
+    if (a["process"] or "").strip() in ALIASES or (a["sector"] or "").strip() in ALIASES
+]
+placeholder_attributable = sum(1 for a in placeholder_apps if a["gates"]["attributable"])
+
 # ----------------------------------------------------------------------- meta
 meta = {
     "product": "XOps Operational Graph",
@@ -429,95 +475,115 @@ meta = {
     "version": "POC v1",
     "as_of": AS_OF,
     "universe_apps": len(applications),
-    "scope_note": "Impacto por proceso y ruteo. NO incluye impacto por audiencia de dashboards, "
-                  "excluido por decision de alcance, no por olvido.",
+    "scope_note": "Impact by process and routing. Does NOT include impact by dashboard audience, "
+                  "excluded by a scope decision, not by oversight.",
     "source_file": SRC.name,
     "rules": [
-        {"id": "R1", "title": "La Business Application es la espina dorsal",
-         "statement": "Proceso, sector y criticidad viven en la aplicacion y suben al Assignment Group, nunca al reves."},
-        {"id": "R2", "title": "Toda relacion es N:M",
-         "statement": "Una aplicacion llega a 5 plataformas y a 14 Assignment Groups.",
-         "consequence": "Una columna de lookup seria falsa desde la primera fila; se resuelve con tabla puente."},
-        {"id": "R3", "title": "Ninguna metrica se muestra sin su cobertura declarada",
-         "statement": "La cobertura es parte de la metrica: siempre resuelto sobre universo y porcentaje."},
-        {"id": "R4", "title": "El blast radius no es aditivo entre plataformas",
-         "statement": "Al combinar plataformas se calcula la union deduplicada de app_ids, nunca la suma.",
-         "consequence": "Hay aplicaciones que corren en Teradata y SAP BW a la vez; sumar las cuenta dos veces."},
-        {"id": "R5", "title": "El volumen de tickets es eje de costo, nunca eje de riesgo",
-         "statement": "tickets no se colorea con semaforo de riesgo ni se ordena junto a criticidad.",
-         "consequence": "La relacion con criticidad es inversa; usarlo como senal de riesgo prioriza lo menos critico."},
-        {"id": "R6", "title": "La calidad de work notes se mide con un solo instrumento declarado",
-         "statement": "El scorer canonico es QN v2.4.2.",
-         "consequence": "Comparar bandas de dos scorers distintos produce un delta que es artefacto del instrumento."},
-        {"id": "R7", "title": "Technology Stack es texto libre y su normalizacion es una derivacion declarada",
-         "statement": "La clasificacion a plataformas canonicas no es un dato de origen.",
-         "consequence": "Debe revisarse antes de usarse para decisiones de arquitectura, y se marca como E3."},
-        {"id": "R8", "title": "Cada fila de puente lleva su nivel de evidencia y su fuente",
-         "statement": "E1 es CMDB, E2 analisis derivado, E3 hoja de calculo."},
+        {"id": "R1", "title": "The Business Application is the backbone",
+         "statement": "Process, sector and criticality live on the application and roll up to the "
+                      "Assignment Group, never the other way round."},
+        {"id": "R2", "title": "Every relationship is N:M",
+         "statement": "One application reaches 5 platforms and 14 Assignment Groups.",
+         "consequence": "A lookup column would be wrong from the first row; the link is resolved with a "
+                        "bridge table."},
+        {"id": "R3", "title": "No metric is shown without its declared coverage",
+         "statement": "Coverage is part of the metric: always resolved over universe, plus the percentage."},
+        {"id": "R4", "title": "Blast radius is not additive across platforms",
+         "statement": "Combining platforms computes the deduplicated union of app_ids, never the sum.",
+         "consequence": "Some applications run on Teradata and SAP BW at the same time; adding the radii "
+                        "counts them twice."},
+        {"id": "R5", "title": "Ticket volume is a cost axis, never a risk axis",
+         "statement": "Tickets are not colour-coded with a risk scale and are not ranked next to criticality.",
+         "consequence": "Its relationship with criticality is inverse; using it as a risk signal would "
+                        "prioritise the least critical work."},
+        {"id": "R6", "title": "Work-notes quality is measured with a single declared instrument",
+         "statement": "The canonical scorer is QN v2.4.2.",
+         "consequence": "Comparing bands from two different scorers produces a delta that is an artefact "
+                        "of the instrument."},
+        {"id": "R7", "title": "Technology Stack is free text and its normalization is a declared derivation",
+         "statement": "The classification into canonical platforms is not source data.",
+         "consequence": "It must be reviewed before being used for architecture decisions, and it is "
+                        "marked as E3."},
+        {"id": "R8", "title": "Every bridge row carries its evidence tier and its source",
+         "statement": "E1 is CMDB, E2 is derived analysis, E3 is a spreadsheet."},
     ],
     "evidence_tiers": {
-        "E1": "CMDB · alta autoridad",
-        "E2": "Analisis derivado · autoridad media",
-        "E3": "Hoja de calculo · baja autoridad",
+        "E1": "CMDB · high authority",
+        "E2": "Derived analysis · medium authority",
+        "E3": "Spreadsheet · low authority",
     },
     "criticality_scale": {
-        "C1": "Most critical · peso 5",
-        "C2": "Somewhat critical · peso 3",
-        "C3": "Less critical · peso 1",
-        "C-": "No declarada · peso 0",
-        "note": "Normalizado desde dos vocabularios en circulacion: BC1/BC2/BC3 (feb 2026) y "
-                "RP1/RP2/RP3 (ago 2026). criticality_raw conserva el original.",
+        "C1": "Most critical · weight 5",
+        "C2": "Somewhat critical · weight 3",
+        "C3": "Less critical · weight 1",
+        "C-": "Not declared · weight 0",
+        "note": "Normalized from two vocabularies still in circulation: BC1/BC2/BC3 (Feb 2026) and "
+                "RP1/RP2/RP3 (Aug 2026). criticality_raw keeps the original value.",
     },
-    "derivation_warning": "El eslabon Plataforma -> Aplicacion tiene dos origenes de distinta autoridad. "
-                          f"{l1_e2} aplicaciones vienen del analisis de Tech Buckets, que es analisis derivado (E2). "
-                          f"Las otras {l1_e3} se derivaron por coincidencia de palabras clave sobre el campo de "
-                          "texto libre Technology Stack, lo cual es E3 y admite falsos positivos y falsos negativos. "
-                          "La interfaz distingue ambos origenes y no los presenta como equivalentes.",
+    "derivation_warning": "The Platform -> Application link has two sources of different authority. "
+                          f"{l1_e2} applications come from the Tech Buckets analysis, which is derived "
+                          f"analysis (E2). The other {l1_e3} were derived by keyword matching over the "
+                          "free-text Technology Stack field, which is E3 and admits both false positives "
+                          "and false negatives. The interface distinguishes the two origins and never "
+                          "presents them as equivalent.",
     "out_of_scope": [
-        "Dashboard -> Aplicacion: hoja de captura abierta, "
-        f"{confirmed_ws} de {len(workspaces)} workspaces confirmados.",
-        "Aplicacion -> Audiencia: depende del eslabon anterior.",
-        "RCA Intelligence, Agent Actions y escritura hacia ServiceNow.",
+        "Dashboard -> Application: capture sheet still open, "
+        f"{confirmed_ws} of {len(workspaces)} workspaces confirmed.",
+        "Application -> Audience: depends on the link above.",
+        "RCA Intelligence, Agent Actions and writes back to ServiceNow.",
     ],
     "dashboard_link": {
         "workspaces": len(workspaces),
         "dashboards_active": len(consumption),
         "confirmed": confirmed_ws,
         "top30_views_share_pct": round(100 * sum(w["views_6m"] or 0 for w in top30) / total_views, 1),
-        "note": "El unico input manual del modelo es application_name_CONFIRMED. El match por nombre "
-                "resuelve poco y el fuzzy produce falsos positivos por subconjunto, por lo tanto la "
-                "confirmacion es humana por diseno. Mientras este vacia, el impacto por audiencia no se estima.",
+        "note": "The only manual input in the model is application_name_CONFIRMED. Exact name matching "
+                "resolves very little and fuzzy matching produces subset false positives, so confirmation "
+                "is human by design. While it stays empty, audience impact is not estimated.",
     },
     "link_sources": {
         "platform": {
-            "E2": "Analisis de Tech Buckets · Impact_Lineage_Matrix (feb 2026)",
-            "E3": "Normalizacion por palabra clave del campo libre Technology Stack (inventario Margarita)",
+            "E2": "Tech Buckets analysis · Impact_Lineage_Matrix (Feb 2026)",
+            "E3": "Keyword normalization of the free-text Technology Stack field (Margarita inventory)",
         },
         "assignment_group": {
-            "E3": "DPM_and_Application_List hoja 12 (ago 2026) + Assignment Group del inventario Margarita",
+            "E3": "DPM_and_Application_List sheet 12 (Aug 2026) + Assignment Group from the Margarita inventory",
         },
     },
     "data_quality_notes": [
         {
             "id": "DQ1",
-            "title": "El catalogo de Assignment Groups repite destinos",
-            "detail": f"{len(duplicate_ag_keys)} pares de nombres normalizan a la misma clave por "
-                      "espaciado o puntuacion, por lo que las 268 filas representan menos destinos "
-                      "de ruteo distintos. Afecta el cruce con calidad, que se une por clave.",
+            "title": "The Assignment Group catalogue repeats destinations",
+            "detail": f"{len(duplicate_ag_keys)} pairs of names normalize to the same key because of "
+                      "spacing or punctuation, so the 268 rows represent fewer distinct routing "
+                      "destinations. This affects the join with quality, which matches on the key.",
             "items": duplicate_ag_keys,
         },
         {
             "id": "DQ2",
-            "title": "ag_count del inventario no coincide con el puente",
-            "detail": f"En {ag_count_gap} aplicaciones la columna assignment_groups declara un grupo "
-                      "mas que el puente. La columna esta topada en 10 entradas, corta el ultimo "
-                      "nombre a la mitad y repite variantes del mismo grupo. El puente "
-                      "05_BRIDGE_APP_AG es la fuente exacta y es la que alimenta la aplicacion.",
+            "title": "The inventory's ag_count does not match the bridge",
+            "detail": f"In {ag_count_gap} applications the assignment_groups column declares one group "
+                      "more than the bridge does. That column is capped at 10 entries, truncates the "
+                      "last name mid-string and repeats variants of the same group. The bridge "
+                      "05_BRIDGE_APP_AG is the exact source and is what feeds this application.",
+        },
+        {
+            "id": "DQ3",
+            "title": "Three spellings for the same non-value",
+            "detail": "The sheet writes an unresolved process or sector as "
+                      + ", ".join(f"{k} ({v})" for k, v in sorted(placeholder_counts.items()))
+                      + f". The interface treats all three as unresolved, so {len(placeholder_apps)} "
+                        "applications now show a TBD chip where the raw text reads Por confirmar or not "
+                        "stated. The Attributable gate is NOT "
+                        f"rewritten: it stays exactly as the sheet declares it, and {placeholder_attributable} "
+                        "of those applications are still marked attributable there. The disagreement is "
+                        "surfaced rather than reconciled.",
         },
     ],
     "ai_ops": {
-        "note": "Cluster 06 AI Ops. La cobertura de ruteo del portafolio AI/ML es la mas baja del modelo, "
-                "coherente con que el catalogo de actividades L1.5 de ese cluster aun no esta declarado.",
+        "note": "Cluster 06 AI Ops. Routing coverage for the AI/ML portfolio is the lowest in the model, "
+                "consistent with the fact that the L1.5 activity catalogue for that cluster has not been "
+                "declared yet.",
     },
 }
 

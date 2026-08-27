@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Criticality, Gates } from "@/types";
 import { isTbd } from "@/lib/data";
 
-/** Lo no confirmado se declara como TBD, nunca en blanco ni como guion. */
+/** Anything unconfirmed is declared as TBD, never blank and never a dash. */
 export function TbdValue({ value, className = "" }: { value: string | null | undefined; className?: string }) {
   if (isTbd(value)) {
     return (
@@ -18,24 +18,24 @@ const CRIT: Record<Criticality, { cls: string; label: string }> = {
   C1: { cls: "border-bad/40 bg-bad/10 text-bad", label: "C1 · most critical" },
   C2: { cls: "border-ev-e2/40 bg-ev-e2/10 text-ev-e2", label: "C2 · somewhat critical" },
   C3: { cls: "border-pep-500/40 bg-pep-50 text-pep-700", label: "C3 · less critical" },
-  "C-": { cls: "border-ink-300 bg-ink-100 text-ink-500", label: "No declarada" },
+  "C-": { cls: "border-ink-300 bg-ink-100 text-ink-500", label: "Not declared" },
 };
 
-/** 324 de 504 aplicaciones no tienen criticidad declarada. No se imputan. */
+/** 324 of 504 applications have no declared criticality. None is imputed. */
 export function CriticalityChip({ value, withLabel = false }: { value: Criticality; withLabel?: boolean }) {
   const c = CRIT[value] ?? CRIT["C-"];
   return (
     <span className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[11px] font-semibold ${c.cls}`}>
-      {withLabel ? c.label : value === "C-" ? "No declarada" : value}
+      {withLabel ? c.label : value === "C-" ? "Not declared" : value}
     </span>
   );
 }
 
 const GATES: [keyof Gates, string, string][] = [
-  ["attributable", "A", "Atribuible · proceso y sector"],
-  ["routable", "R", "Ruteable · con Assignment Group"],
-  ["owned", "D", "Con dueño · DPM sin TBD"],
-  ["platform_known", "P", "Con plataforma identificada"],
+  ["attributable", "A", "Attributable · process and sector"],
+  ["routable", "R", "Routable · has an Assignment Group"],
+  ["owned", "D", "Owned · DPM without TBD"],
+  ["platform_known", "P", "Platform identified"],
 ];
 
 /** Una compuerta cerrada se muestra, nunca filtra la fila fuera de la lista. */
@@ -62,20 +62,20 @@ export function GateChips({ gates }: { gates: Gates }) {
 export function NotRoutableTag() {
   return (
     <span className="inline-flex items-center rounded border border-ink-300 bg-ink-100 px-1.5 py-0.5 text-[11px] font-medium text-ink-600">
-      No ruteable
+      Not routable
     </span>
   );
 }
 
 /**
- * R5 · El volumen de tickets es eje de costo, nunca eje de riesgo.
- * Un solo color neutro cualquiera que sea el volumen: sin semaforo.
+ * R5 · Ticket volume is a cost axis, never a risk axis.
+ * One neutral colour whatever the volume: no traffic-light scale.
  */
 export function SupportLoad({ value, showLabel = false }: { value: number | null; showLabel?: boolean }) {
   return (
     <span className="inline-flex items-baseline gap-1.5 text-ink-700">
-      <span className="num text-sm">{value == null ? "—" : value.toLocaleString("es-MX")}</span>
-      {showLabel ? <span className="text-[10px] uppercase tracking-wide text-ink-400">carga de soporte</span> : null}
+      <span className="num text-sm">{value == null ? "—" : value.toLocaleString("en-US")}</span>
+      {showLabel ? <span className="text-[10px] uppercase tracking-wide text-ink-400">support load</span> : null}
     </span>
   );
 }
@@ -97,8 +97,8 @@ export function AiTag() {
   );
 }
 
-/** La calidad se mide por AG, no por aplicacion: se etiqueta como aproximacion. */
-export function ApproxTag({ children = "aproximación vía AGs" }: { children?: React.ReactNode }) {
+/** Quality is measured per AG, not per application: labelled as an approximation. */
+export function ApproxTag({ children = "approximation via AGs" }: { children?: React.ReactNode }) {
   return (
     <span className="inline-flex items-center rounded border border-ev-e2/40 bg-ev-e2/10 px-1.5 py-0.5 text-[10px] font-semibold text-ev-e2">
       {children}

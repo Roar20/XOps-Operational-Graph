@@ -3,8 +3,8 @@ import { useState } from "react";
 import { meta } from "@/lib/data";
 
 /**
- * R8 · Cada eslabon lleva su nivel de evidencia. E1 CMDB, E2 analisis
- * derivado, E3 hoja de calculo. Es un atributo del dato, no un disclaimer.
+ * R8 · Every link carries its evidence tier. E1 CMDB, E2 derived analysis,
+ * E3 spreadsheet. It is an attribute of the datum, not a disclaimer.
  */
 const STYLE: Record<string, string> = {
   E1: "border-ev-e1/40 bg-ev-e1/10 text-ev-e1",
@@ -13,10 +13,10 @@ const STYLE: Record<string, string> = {
   "E2/E3": "border-ev-e3/40 bg-ev-e3/10 text-ev-e3",
 };
 export const AUTHORITY: Record<string, string> = {
-  E1: "alta autoridad",
-  E2: "autoridad media",
-  E3: "baja autoridad",
-  "E2/E3": "autoridad mixta",
+  E1: "high authority",
+  E2: "medium authority",
+  E3: "low authority",
+  "E2/E3": "mixed authority",
 };
 
 export function EvidenceBadge({

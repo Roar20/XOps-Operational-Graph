@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
 
 /**
- * R3 · Ninguna metrica se muestra sin su cobertura declarada.
- * Este componente es el unico camino para publicar una proporcion: exige
- * `resolved` y `universe`, y siempre imprime "165 de 504 · 32.7%".
- * No existe forma de renderizar el porcentaje suelto.
+ * R3 · No metric is shown without its declared coverage.
+ * This component is the only way to publish a proportion: it requires both
+ * `resolved` and `universe`, and always prints "165 of 504 · 32.7%".
+ * There is no code path that renders a bare percentage.
  */
 export function Metric({
   label, resolved, universe, unitLabel, note, compact = false, tone = "neutral",
@@ -23,9 +23,9 @@ export function Metric({
     <div>
       {label ? <div className="label">{label}</div> : null}
       <div className={`${compact ? "text-lg" : "text-2xl"} font-semibold leading-tight ${tint}`}>
-        <span className="num">{resolved.toLocaleString("es-MX")}</span>
-        <span className="font-normal text-ink-400"> de </span>
-        <span className="num font-normal text-ink-500">{universe.toLocaleString("es-MX")}</span>
+        <span className="num">{resolved.toLocaleString("en-US")}</span>
+        <span className="font-normal text-ink-400"> of </span>
+        <span className="num font-normal text-ink-500">{universe.toLocaleString("en-US")}</span>
       </div>
       <div className="subtle num mt-0.5">
         {pct.toFixed(1)}%{unitLabel ? <span className="font-sans"> · {unitLabel}</span> : null}
@@ -35,12 +35,12 @@ export function Metric({
   );
 }
 
-/** Version en linea de R3, para usar dentro de un parrafo. */
+/** Inline version of R3, for use inside a sentence. */
 export function InlineMetric({ resolved, universe }: { resolved: number; universe: number }) {
   const pct = universe > 0 ? (resolved / universe) * 100 : 0;
   return (
     <span className="num whitespace-nowrap font-semibold">
-      {resolved.toLocaleString("es-MX")} de {universe.toLocaleString("es-MX")} · {pct.toFixed(1)}%
+      {resolved.toLocaleString("en-US")} of {universe.toLocaleString("en-US")} · {pct.toFixed(1)}%
     </span>
   );
 }

@@ -4,8 +4,8 @@ import { useRouter } from "next/navigation";
 import { searchApps } from "@/lib/data";
 import { CriticalityChip, NotRoutableTag } from "./Chips";
 
-/** Buscador global por nombre y APM, accesible desde cualquier pantalla,
- *  con navegación por teclado (↑ ↓ Enter Esc, ⌘K para enfocar). */
+/** Global search by name and APM, reachable from any screen, with keyboard
+ *  navigation (↑ ↓ Enter Esc, ⌘K to focus). */
 export function GlobalSearch() {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
@@ -50,8 +50,8 @@ export function GlobalSearch() {
           else if (e.key === "Enter") { e.preventDefault(); go(results[cursor].app_id); }
           else if (e.key === "Escape") setOpen(false);
         }}
-        placeholder="Buscar aplicación por nombre o APM…"
-        aria-label="Buscar aplicación por nombre o APM"
+        placeholder="Search an application by name or APM…"
+        aria-label="Search an application by name or APM"
         role="combobox"
         aria-expanded={open}
         aria-controls="xog-search-results"
@@ -64,7 +64,7 @@ export function GlobalSearch() {
       {open && q.trim().length >= 2 ? (
         <div className="absolute left-0 right-0 top-full z-40 mt-1 overflow-hidden rounded border border-ink-200 bg-white shadow-xl">
           {results.length === 0 ? (
-            <div className="px-3 py-3 text-sm text-ink-500">Sin coincidencias para “{q}”.</div>
+            <div className="px-3 py-3 text-sm text-ink-500">No matches for “{q}”.</div>
           ) : (
             <ul id="xog-search-results" role="listbox" className="scroll-thin max-h-80 overflow-y-auto">
               {results.map((a, i) => (
@@ -74,7 +74,7 @@ export function GlobalSearch() {
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-medium text-ink-900">{a.name}</span>
                       <span className="num block truncate text-[11px] text-ink-500">
-                        {a.apm || "sin APM"} · {a.app_id}
+                        {a.apm || "no APM"} · {a.app_id}
                       </span>
                     </span>
                     <CriticalityChip value={a.criticality} />
