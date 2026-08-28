@@ -4,6 +4,7 @@ import "./globals.css";
 import { meta } from "@/lib/data";
 import { Nav } from "@/components/Nav";
 import { CommandPalette } from "@/components/CommandPalette";
+import { CorpusProvider } from "@/lib/qn/corpus";
 import { RulesPanel } from "@/components/RulesPanel";
 
 export const metadata: Metadata = {
@@ -15,6 +16,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
+        <CorpusProvider>
         <header className="sticky top-0 z-30 border-b border-ink-200 bg-white/95 backdrop-blur">
           <div className="mx-auto flex max-w-[1560px] flex-wrap items-center gap-x-5 gap-y-3 px-5 py-3">
             <Link href="/" className="flex items-baseline gap-2">
@@ -53,6 +55,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             Proof of concept with declared partial coverage. Source {meta.source_file} · cut-off {meta.as_of}.
           </p>
         </footer>
+        </CorpusProvider>
       </body>
     </html>
   );

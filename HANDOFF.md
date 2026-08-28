@@ -436,66 +436,74 @@ controles HUD del grafo.
 
 ---
 
-## 7. Sección de carga de datos (hecha)
+## 7. El libro es la fuente de verdad (hecho)
 
-Es el entregable **A** del workstream, el portero, y la **C**, la ingesta en
-runtime. Ruta `/upload`, en `Nav.tsx` como *Load Data*.
+Se elimino la dependencia de JSON pregenerado. `data/` vuelve a tener un solo
+archivo: el de la capa semantica. No hay paso previo que correr.
 
 ```
-scripts/build_qn_aggregates.py  proyector: libro -> agregados + manifiesto
-lib/qn/types.ts                 contrato entre worker e interfaz
-lib/qn/db.ts                    lectura de IndexedDB, compartida con el agente
-lib/qn/ingest.worker.ts         Web Worker: parsea, valida e indexa
-components/CorpusUpload.tsx     la sección de carga
-app/upload/page.tsx             la ruta
+lib/qn/contract.ts        contrato en codigo: forma esperada, NUNCA cifras
+lib/qn/ingest.worker.ts   parsea, valida, clasifica alcance, deriva e indexa
+lib/qn/corpus.tsx         proveedor React; regla de autoridad y procedencia
+lib/qn/db.ts              lectura de IndexedDB, compartida
+components/CorpusUpload.tsx    carga, datasets e invariantes
+components/CorpusAnalysis.tsx  analisis sobre el corpus cargado
 ```
 
-**El validador corre antes de escribir una sola fila.** Compara el archivo
-contra `data/QN_v242_contract.json`: hojas presentes y contrato de columnas por
-hoja, con las de banner exentas porque no tienen encabezado tabular. El reporte
-dice qué hoja, qué columnas faltan, cuántas filas se descartaron y por qué.
+`scripts/build_qn_aggregates.py` queda como utilidad de depuracion. **No es
+requisito para que la app corra.**
 
-**Dos veredictos, no uno.** Fue la decisión de diseño de esta sesión:
+### El alcance es por dataset, no por libro
 
-| Veredicto | Qué significa | Consecuencia |
+Cada hoja se somete a su propia prueba de cobertura contra la poblacion que
+declara Overview. Nada esta escrito en el codigo. Resultado medido con el libro
+de muestra:
+
+| Hoja | Alcance | Probado por |
 |---|---|---|
-| `verified` | la estructura es la del corpus | **sin esto no se estampa el corte** |
-| `complete` | además el volumen iguala la población declarada | sin esto las cifras se rotulan *muestra* |
+| `User_By_Group`, `Alert_By_Group` | **Full corpus** | la suma de su columna iguala la poblacion |
+| `Dual_Axis` | **Full corpus** | su fila Total iguala la poblacion |
+| `By_Decalogue` | **Full corpus** | su Summary declara el denominador `/ 277,408` |
+| `Compliance_*`, `Decalogue_Validation` | **Full corpus** | declaran su propia poblacion adentro |
+| `User_Detail`, `Alert_Detail` | **Sample** | 500 filas contra la poblacion declarada |
+| `Decalogue_By_Group` | **Scope unknown** | no declara denominador: no se asume |
 
-Un binario habría obligado a rechazar el archivo de muestra, que es justo el que
-se quiere cargar para analizar. Con dos, la muestra se indexa y se usa, y sus
-cifras dicen que describen las filas cargadas y no la población. Probado de
-punta a punta en navegador con el archivo real: `verified: true`,
-`complete: false`, corte `2026-08-12` estampado, 500 + 500 filas indexadas.
+Regla de autoridad: las cifras de poblacion salen de la hoja agregada que cubre
+el corpus, nunca del detalle muestreado. Cada bloque de la interfaz declara su
+hoja de origen, su alcance y su calculo en el panel *Source*.
 
-Nada sube a un servidor. El detalle se queda en IndexedDB de quien lo carga.
+### Dos correcciones que impuso el libro real
 
-### Dos fallas del contrato original, encontradas al implementarlo
+**El libro NO declara un corte de datos.** `2026-08-13 14:17` en Overview es la
+hora en que se genero el reporte. El corte `2026-08-12` venia del handoff, no
+del archivo. La app ya no lo estampa: dice *cut-off not declared* y publica la
+hora de generacion por separado. Una fecha en pantalla es una afirmacion, y esa
+no estaba respaldada.
 
-**1. El índice `Ops Classification` no existe y no puede existir.** El contrato
-que traía este documento pedía `alert … index "Ops Classification"`. IndexedDB
-rechaza un keyPath con espacios: *"The keyPath argument contains an invalid key
-path"*. Cada fila de alerta lleva ahora `ops_class` precomputado y el índice va
-sobre ese campo; la columna original se conserva intacta en la fila.
+**El detalle muestreado no es aleatorio.** `Closed At` de las 500 filas va de
+**2024-01-02 a 2024-01-20**. Se publica el rango como observacion junto al
+conteo. Es una razon mas para no derivar poblacion de ahi.
 
-**2. El fallo se colgaba en silencio.** El error ocurría dentro de
-`onupgradeneeded`, fuera del `try/catch`, así que la promesa nunca resolvía ni
-rechazaba: la barra de progreso se quedaba quieta sin decir nada. Ahora el
-handler captura, aborta la transacción y rechaza con el mensaje.
+### By_Decalogue: dos medidas, no una con aviso
 
-`lib/agent/client-tools.ts` dejó de tener su propia copia de la apertura de
-IndexedDB y usa `lib/qn/db.ts`, para que no puedan divergir.
+`classifiedIncidents` **35,814** (unidad: incidente) y `codeOccurrences`
+**39,320** (unidad: ocurrencia), con el sobreconteo **3,506** publicado aparte.
+La interfaz nunca presenta 39,320 como poblacion.
 
-### Lo que queda de este workstream
+### Invariantes, ahora en tres clases
 
-- **B**, el proyector de agregados, existe pero la app todavía no consume
-  `QN_v242_aggregates.json` en pantalla: hoy sólo lo leen las herramientas de
-  servidor del agente. Falta integrarlo a `types/index.ts` **extendiendo** el
-  tipo, no reemplazándolo.
-- **D**, la ficha de ticket en `/ticket/[number]`, sin empezar. La ingesta ya
-  deja el dato indexado por `Number`, así que el eslabón que faltaba está.
-- El análisis visual sobre el corpus cargado: hoy `/upload` reporta la validación
-  y deja el detalle consultable por el agente, pero no dibuja todavía.
+Las trece siguen. `structural` decide si se estampa el corte; `population` y
+`semantic` marcan los datasets que protegen como no verificados sin repararlos
+en silencio. 13/13 pasan con este libro.
+
+### Conflicto que queda abierto
+
+`/quality` muestra dos fuentes en una escalera de autoridad, no dos caminos.
+Arriba el libro cargado. Abajo la proyeccion QN que la capa semantica trae
+embebida, que sigue siendo la unica capaz de responder **serie temporal** y
+**firmas recurrentes a escala de poblacion**: el libro no trae hoja temporal y su
+`Short Description` solo existe en el detalle muestreado. Recalcular esas dos
+desde 500 filas seria presentar una muestra como poblacion.
 
 ---
 

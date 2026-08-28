@@ -1,40 +1,26 @@
 "use client";
 /**
- * Acceso de LECTURA al corpus en IndexedDB. Lo comparten el cargador y las
- * herramientas de cliente del agente, para que no existan dos versiones de la
- * misma logica que puedan divergir.
+ * Acceso de LECTURA al corpus en IndexedDB. Lo comparten el cargador, las
+ * pantallas de analisis y las herramientas del agente, para que no existan dos
+ * versiones de la misma logica que puedan divergir.
  */
+import type { CorpusSnapshot, Dataset, DatasetId } from "./types";
 
 export const CORPUS_DB = "xops-corpus";
-
-export type CorpusMeta = {
-  as_of: string | null;
-  sha256: string;
-  instrument: string;
-  verified: boolean;
-  complete?: boolean;
-  rows: { user: number; alert: number };
-  file_name?: string;
-  loaded_at?: string;
-  report?: unknown;
-};
 
 /**
  * Abre el corpus SIN crearlo. Es lectura y no debe dejar rastro si no hay nada
  * que leer.
  *
- * La version ingenua, indexedDB.open(DB, 1) resolviendo null en
+ * La version ingenua, indexedDB.open(DB, N) resolviendo null en
  * onupgradeneeded, tiene dos fallas verificadas en navegador:
  *
  *  1. Deja la base creada. Resolver null reporta "no hay corpus" pero la
- *     transaccion de version sigue su curso y queda xops-corpus@1 vacia. Cuando
- *     despues la ingesta abre en la version 1, onupgradeneeded ya NO dispara,
- *     asi que no puede crear sus object stores. Basta con que alguien le
- *     pregunte algo al agente antes de cargar el corpus para inutilizarla.
- *  2. Fija la version. Si la ingesta sube a la 2, open(DB, 1) lanza
- *     VersionError y se diria que no hay corpus teniendolo cargado.
- *
- * Por eso: sin fijar version, y si la base no existia se aborta la creacion.
+ *     transaccion de version sigue su curso y queda la base vacia. Cuando
+ *     despues la ingesta abre en esa misma version, onupgradeneeded ya NO
+ *     dispara, asi que no puede crear sus object stores.
+ *  2. Fija la version. Si la ingesta sube de version, open con la anterior
+ *     lanza VersionError y se diria que no hay corpus teniendolo cargado.
  */
 export function openExisting(): Promise<IDBDatabase | null> {
   return new Promise((resolve) => {
@@ -61,11 +47,7 @@ export function openExisting(): Promise<IDBDatabase | null> {
     };
     req.onerror = () => {
       if (creating) {
-        try {
-          indexedDB.deleteDatabase(CORPUS_DB);
-        } catch {
-          /* nada que limpiar */
-        }
+        try { indexedDB.deleteDatabase(CORPUS_DB); } catch { /* nada que limpiar */ }
       }
       resolve(null);
     };
@@ -73,24 +55,57 @@ export function openExisting(): Promise<IDBDatabase | null> {
   });
 }
 
-/** Estado del corpus cargado, o null si este navegador no tiene ninguno. */
-export async function readCorpusMeta(): Promise<CorpusMeta | null> {
-  const db = await openExisting();
-  if (!db) return null;
-  const meta = await new Promise<CorpusMeta | null>((resolve) => {
+function get<T>(db: IDBDatabase, store: string, key: IDBValidKey): Promise<T | null> {
+  return new Promise((resolve) => {
     try {
-      const r = db.transaction("meta", "readonly").objectStore("meta").get("current");
-      r.onsuccess = () => resolve((r.result as CorpusMeta) ?? null);
+      const r = db.transaction(store, "readonly").objectStore(store).get(key);
+      r.onsuccess = () => resolve((r.result as T) ?? null);
       r.onerror = () => resolve(null);
     } catch {
       resolve(null);
     }
   });
-  db.close();
-  return meta;
 }
 
-/** Borra el corpus de este navegador. Lo usa el boton de descarga del cargador. */
+/** Estado del corpus cargado, o null si este navegador no tiene ninguno. */
+export async function readSnapshot(): Promise<CorpusSnapshot | null> {
+  const db = await openExisting();
+  if (!db) return null;
+  const snap = await get<CorpusSnapshot>(db, "meta", "current");
+  db.close();
+  return snap;
+}
+
+/** Snapshot y datasets en una sola apertura: es lo que consume el proveedor. */
+export async function readCorpus(): Promise<{
+  snapshot: CorpusSnapshot;
+  datasets: Partial<Record<DatasetId, Dataset>>;
+} | null> {
+  const db = await openExisting();
+  if (!db) return null;
+  const snapshot = await get<CorpusSnapshot>(db, "meta", "current");
+  if (!snapshot) { db.close(); return null; }
+
+  const datasets = await new Promise<Partial<Record<DatasetId, Dataset>>>((resolve) => {
+    const out: Partial<Record<DatasetId, Dataset>> = {};
+    try {
+      const req = db.transaction("datasets", "readonly").objectStore("datasets").openCursor();
+      req.onsuccess = () => {
+        const cur = (req as IDBRequest<IDBCursorWithValue>).result;
+        if (!cur) return resolve(out);
+        out[cur.key as DatasetId] = cur.value as Dataset;
+        cur.continue();
+      };
+      req.onerror = () => resolve(out);
+    } catch {
+      resolve(out);
+    }
+  });
+  db.close();
+  return { snapshot, datasets };
+}
+
+/** Borra el corpus de este navegador. */
 export function deleteCorpus(): Promise<boolean> {
   return new Promise((resolve) => {
     if (typeof indexedDB === "undefined") return resolve(false);
