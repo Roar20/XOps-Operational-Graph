@@ -2,7 +2,32 @@
 @tailwind components;
 @tailwind utilities;
 
-:root { color-scheme: light; }
+/* Paleta PepsiCo expuesta como variables, para SVG escrito a mano, hojas de
+   estilo y cualquier exportable fuera de Tailwind. Los mismos hex viven en
+   tailwind.config.ts y en lib/palette.ts.
+
+   Aviso: var() NO resuelve dentro de un atributo de presentacion de SVG
+   (fill="var(--pep-900)" se pinta negro). Sirve en propiedades CSS. El codigo
+   que le pasa colores a recharts o al grafo importa de lib/palette.ts. */
+:root {
+  color-scheme: light;
+
+  --pep-950: #01223A; --pep-900: #02355A; --pep-800: #0C487C; --pep-700: #155798;
+  --pep-600: #276EB6; --pep-500: #3680CE; --pep-400: #72A6DD; --pep-300: #9FC2E7;
+  --pep-200: #CBDEF2; --pep-100: #E5EEF9; --pep-50:  #F4F8FC;
+
+  --canvas: #F5F4F0;
+
+  --ink-900: #12202E; --ink-800: #223444; --ink-700: #33475B; --ink-600: #475C70;
+  --ink-500: #5B7085; --ink-400: #8496A8; --ink-300: #B3C0CC; --ink-200: #D8DFE6;
+  --ink-100: #EAEEF2; --ink-50:  #F5F6F9;
+
+  --acc-teal: #0F6E6E; --acc-teal-soft: #2A9D9D; --acc-cyan: #1B93C7;
+  --acc-indigo: #3B4E9B; --acc-slate: #4A6FA5;
+
+  --good: #1F7A5A; --warn: #B26A00; --bad: #A03535; --neutral: #5B7085;
+  --ev-e1: #1F7A5A; --ev-e2: #B26A00; --ev-e3: #A03535;
+}
 body { @apply bg-canvas text-ink-900 antialiased; }
 
 @layer components {

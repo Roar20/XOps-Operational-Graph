@@ -3,8 +3,13 @@
 Documento de continuidad. Pegar / abrir esto al inicio de una sesión nueva.
 
 **Repo:** `Roar20/XOps-Operational-Graph`
-**Rama de trabajo (única autorizada):** `claude/xops-operational-graph-poc-2ycnay`
-**Último commit:** `fc155cc` — *Agrega la capa de entrada de negocio, sectores, impacto y trazabilidad*
+**Rama de trabajo:** `claude/handoff-qn-data-setup-pi5neu`
+**Último commit:** `c4c0058` — *Agrega HANDOFF.md con el estado de la POC y el alcance del corpus QN v2.4.2*
+
+> Nota de rama: este documento nombraba `claude/xops-operational-graph-poc-2ycnay`
+> como única rama autorizada. La sesión que escribió la paleta recibió instrucción
+> explícita de desarrollar en `claude/handoff-qn-data-setup-pi5neu`, y ahí quedó.
+> Las dos ramas existen; decidir cuál es la de verdad antes de seguir.
 
 ---
 
@@ -44,6 +49,53 @@ No crear pull request salvo pedido explícito.
 - typecheck limpio, **514** rutas estáticas (504 de `/app/[app_id]`)
 - Paleta validada contra el piso de contraste 2:1 del skill `dataviz`
 
+### Paleta PepsiCo · rampa completa (hecho)
+
+La paleta pasó de cinco tonos sueltos a la rampa completa. Vive en tres lugares
+que salen de los mismos hex: `tailwind.config.ts` (clases), `:root` de
+`app/globals.css` (variables CSS, para SVG a mano, draw.io y exportables) y
+`lib/palette.ts` (constantes TS).
+
+> **Por qué `lib/palette.ts` y no las variables CSS en todo:** los atributos de
+> presentación de SVG no resuelven `var()`. `fill="var(--pep-900)"` se pinta
+> negro. Recharts escribe `fill` y `stroke` como atributos, así que todo lo que
+> pinta desde JavaScript importa de `lib/palette.ts`.
+
+Los 11 ratios de contraste que declara la especificación de paleta se
+reprodujeron uno por uno contra `#FFFFFF` y contra `#F5F4F0`: **los 11 coinciden**.
+
+Tres cosas se corrigieron al aplicarla, todas medidas:
+
+| Qué | Antes | Ahora |
+|---|---|---|
+| `ink-800`, `ink-600`, `ink-50` usados en **53 lugares** pero nunca definidos en el config. Tailwind no generaba la clase, así que el color **no se aplicaba** | clase muerta | definidos (interpolados sobre las anclas vecinas) |
+| Nodo con foco del grafo de vecindad: texto blanco fijo. Sobre el relleno de AG medía **2.56:1**, debajo del piso AA de 4.5 | 2.56:1 | `onFill()` elige por contraste medido → **6.46:1** |
+| Sankey: relleno de hueco (`ink-400`) contra relleno de ruta separaban **ΔE 7.9** a visión normal. La distinción que el código quería hacer no se veía | ΔE 7.9 | `neutral`, el token que la paleta reserva para *sin dato* → **ΔE > 14** |
+
+**Orden de series categóricas.** El que trae la especificación
+(`pep-900 → acc-teal → pep-500 → acc-indigo → pep-300 → acc-cyan`) deja
+`acc-indigo` adyacente a `pep-500`: ese par separa **ΔE 14.8** a visión normal,
+debajo del piso duro de 15. `lib/palette.ts` publica las mismas seis tintas en
+otro orden — `pep-900 → pep-500 → pep-300 → acc-teal → acc-cyan → acc-indigo` —
+que sube el peor par adyacente a **ΔE 15.9** normal y **14.7** con deficiencia de
+color. Además respeta lo que la propia especificación dice de los acentos: entran
+cuando la gráfica pasa de tres series.
+
+**Lo que no se resolvió, y por qué no se puede aquí:**
+
+- `pep-900` queda fuera de la banda de luminosidad del validador y bajo el piso
+  de croma, igual que `acc-teal` y `pep-300`. Son anclas de marca o derivados
+  directos: cambiarlas es decisión del equipo de marca, no de la app.
+- `pep-900` ↔ `pep-700` separan **ΔE 14.0**, apenas debajo de 15. Son las dos
+  anclas azules oficiales. En el Sankey las separa además la posición y el rótulo.
+- `warn` / `ev-e2` `#B26A00` mide **4.24:1** contra blanco, debajo de AA (4.5)
+  para texto normal. Hay **5 usos como texto** a 10–11px (`text-ev-e2` en
+  `Chips`, `ImpactChip`, `EvidenceBadge`, `Trace`). Los otros 24 usos son fondo
+  o borde y no les aplica. Se dejó el hex tal como lo declara la especificación:
+  oscurecerlo es cambio de paleta, no de código. Si se decide moverlo,
+  `#9A5C00` mide **5.38:1** contra blanco y **4.89:1** contra el canvas, que es
+  el primer paso del mismo tono que pasa AA contra los dos fondos.
+
 ### Comandos
 
 ```bash
@@ -63,6 +115,9 @@ npm run dev
 scripts/build_data.py         proyector único xlsx → JSON (28 invariantes)
 scripts/verify-acceptance.mjs 46 aserciones Playwright
 data/xops-operational-graph-data.json   (879 KB, se embarca al cliente ~86 KB gzip)
+lib/palette.ts                paleta PepsiCo para el código que pinta SVG,
+                              más contrast() y onFill() (elección de texto por
+                              contraste medido, no por color fijo)
 lib/data.ts                   toda la computación: computeBlast, computeGaps,
                               computeSankey, neighbourhood, computeSectorReach,
                               impactProfile, impactRouteCrossing, measureById/LIVE
@@ -126,8 +181,14 @@ Fuente: `7773fc71-XOps_Operational_Graph_Semantic_Layer_v3.xlsx` (287 KB).
 ### 🚫 BLOQUEO ACTUAL
 
 Los dos archivos **no están en disco**. `data/` sólo contiene
-`xops-operational-graph-data.json`. Antes de escribir una línea de código hay que
-colocar:
+`xops-operational-graph-data.json`. Reverificado en la sesión de la paleta: no
+están en `data/`, ni en el working tree, ni en ningún otro punto del contenedor.
+Aparecieron sólo pegados en un chat, y un chat nuevo no hereda esa conversación,
+así que **hay que subirlos al repo desde una máquina que los tenga**. Nadie los
+puede reconstruir desde aquí: son medición, no derivación, y el contrato del
+proyecto prohíbe inventar columnas o conteos.
+
+Antes de escribir una línea de código hay que colocar:
 
 ```
 data/QN_v242_contract.json     (24 KB)   manifiesto medido contra el archivo real

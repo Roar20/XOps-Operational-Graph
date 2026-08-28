@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { GraphEdge, GraphNode, Neighbourhood } from "@/lib/data";
+import { CHART, INK, PEP, STATUS, WHITE, onFill } from "@/lib/palette";
 
 /* Grafo de vecindad en SVG plano. Sin libreria de layout: las posiciones son
    deterministas (tres columnas, reparto uniforme en vertical), de modo que la
@@ -20,9 +21,9 @@ const CH_LABEL = 7.0;
 const CH_META = 5.6;
 
 const FILL: Record<GraphNode["kind"], string> = {
-  platform: "#02355A",
-  application: "#155798",
-  assignment_group: "#93AFC9",
+  platform: PEP[900],
+  application: PEP[700],
+  assignment_group: PEP[400],
 };
 /* El titulo de cada columna se deduce del tipo de nodo que contiene, porque el
    significado de la columna cambia con el foco: con una plataforma en el centro,
@@ -89,7 +90,7 @@ export function NeighbourGraph({ data }: { data: Neighbourhood }) {
         style={{ minWidth: width }}
       >
         {used.map((i) => (
-          <text key={i} x={x.get(i)} y={18} fontSize={11} fontWeight={600} fill="#5B7085"
+          <text key={i} x={x.get(i)} y={18} fontSize={11} fontWeight={600} fill={CHART.tick}
                 letterSpacing="0.06em">
             {KIND_TITLE[cols[i][0].kind].toUpperCase()} · {cols[i].length}
           </text>
@@ -106,7 +107,7 @@ export function NeighbourGraph({ data }: { data: Neighbourhood }) {
               key={i}
               d={`M ${x1} ${a.y} C ${mid} ${a.y}, ${mid} ${b.y}, ${x2} ${b.y}`}
               fill="none"
-              stroke={e.evidence === "E3" ? "#A03535" : "#155798"}
+              stroke={e.evidence === "E3" ? STATUS.bad : PEP[700]}
               strokeWidth={hover && !edgeDim(e) ? 2 : 1}
               strokeOpacity={edgeDim(e) ? 0.08 : e.evidence === "E3" ? 0.45 : 0.5}
               strokeDasharray={e.evidence === "E3" ? "4 3" : undefined}
@@ -127,7 +128,7 @@ export function NeighbourGraph({ data }: { data: Neighbourhood }) {
             >
               <rect
                 x={p.x} y={p.y - 11} width={p.w} height={22} rx={3}
-                fill={n.focus ? FILL[n.kind] : "#FFFFFF"}
+                fill={n.focus ? FILL[n.kind] : WHITE}
                 stroke={FILL[n.kind]}
                 strokeWidth={n.focus ? 2 : 1}
               />
@@ -135,13 +136,13 @@ export function NeighbourGraph({ data }: { data: Neighbourhood }) {
               <text
                 x={p.x + 10} y={p.y} dominantBaseline="middle" fontSize={11}
                 fontWeight={n.focus ? 700 : 500}
-                fill={n.focus ? "#FFFFFF" : "#12202E"}
+                fill={n.focus ? onFill(FILL[n.kind]).text : INK[900]}
               >
                 {label}
               </text>
               {n.meta ? (
                 <text x={p.x + p.w - 8} y={p.y} textAnchor="end" dominantBaseline="middle"
-                      fontSize={9.5} fill={n.focus ? "#DCE8F5" : "#8496A8"}>
+                      fontSize={9.5} fill={n.focus ? onFill(FILL[n.kind]).meta : INK[400]}>
                   {n.meta}
                 </text>
               ) : null}
