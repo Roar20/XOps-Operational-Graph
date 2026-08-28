@@ -1,16 +1,26 @@
 "use client";
 import { Sankey, Tooltip, ResponsiveContainer, Layer, Rectangle } from "recharts";
 import type { SankeyNode } from "@/lib/data";
+import { CHART, PEP, STATUS } from "@/lib/palette";
 
 /* Un color por columna, de la rampa monocroma PepsiCo. La ruta de respuesta
-   usa el gris de referencia cuando falta el AG o el DPM: es un hueco, no una
-   alarma, y no se pinta como riesgo. */
-const KIND_FILL: Record<SankeyNode["kind"], string> = {
-  platform: "#02355A",
-  process: "#155798",
-  route: "#93AFC9",
+   usa el tono neutro cuando falta el AG o el DPM: es un hueco, no una alarma,
+   y no se pinta como riesgo.
+
+   El relleno de hueco es STATUS.neutral, el token que la paleta reserva para
+   "sin dato, bloqueado, no medido". Antes era ink-400 #8496A8, que contra el
+   relleno de ruta separaba dE 7.9 a vision normal: la distincion que este
+   codigo quiere hacer no se veia. Con neutral el par sube por encima de dE 14.
+
+   El par pep-900 / pep-700 se queda en dE 14.0, apenas debajo del piso de 15,
+   y ahi no se toca: son las dos anclas oficiales de marca. Lo que separa esas
+   dos columnas es la posicion y el rotulo, no solo el color. */
+export const KIND_FILL: Record<SankeyNode["kind"], string> = {
+  platform: PEP[900],
+  process: PEP[700],
+  route: PEP[400],
 };
-const GAP_FILL = "#8496A8";
+export const GAP_FILL = STATUS.neutral;
 
 function nodeFill(n: SankeyNode) {
   if (n.kind === "route" && (n.name.includes("No AG") || n.name.includes("TBD"))) return GAP_FILL;
@@ -36,10 +46,10 @@ function NodeShape(props: {
           y={y + height / 2}
           dominantBaseline="middle"
           fontSize={11}
-          fill="#33475B"
+          fill={CHART.tickStrong}
         >
           {short}
-          <tspan fill="#8496A8" fontSize={10}> {payload.value}</tspan>
+          <tspan fill={CHART.tickMuted} fontSize={10}> {payload.value}</tspan>
         </text>
       ) : null}
     </Layer>
@@ -62,12 +72,12 @@ export function SankeyFlow({
           nodeWidth={12}
           iterations={64}
           margin={{ top: 10, right: 190, bottom: 10, left: 10 }}
-          link={{ stroke: "#155798", strokeOpacity: 0.22 }}
+          link={{ stroke: PEP[700], strokeOpacity: 0.22 }}
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           node={(p: any) => <NodeShape {...p} />}
         >
           <Tooltip
-            contentStyle={{ fontSize: 12, borderRadius: 4, border: "1px solid #D8DFE6" }}
+            contentStyle={{ fontSize: 12, borderRadius: 4, border: `1px solid ${CHART.tooltipBorder}` }}
             formatter={(v: unknown) => [`${Number(v)} platform–application links`, "Flow"]}
           />
         </Sankey>

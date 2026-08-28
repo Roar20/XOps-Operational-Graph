@@ -7,8 +7,9 @@ import {
 import { Metric, InlineMetric } from "@/components/Metric";
 import { Note, SectionHeader } from "@/components/SectionHeader";
 import { EvidenceBadge } from "@/components/EvidenceBadge";
-import { SankeyFlow } from "@/components/SankeyFlow";
+import { SankeyFlow, KIND_FILL, GAP_FILL } from "@/components/SankeyFlow";
 import { NeighbourGraph } from "@/components/NeighbourGraph";
+import { PEP, STATUS } from "@/lib/palette";
 
 const GAPS = computeGaps();
 const TOP_DEFAULT = 8;
@@ -115,16 +116,16 @@ export function RelationshipExplorer() {
 
         <div className="mt-2 flex flex-wrap items-center gap-4 text-[11px] text-ink-600">
           <span className="flex items-center gap-1.5">
-            <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: "#02355A" }} /> Platform
+            <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: KIND_FILL.platform }} /> Platform
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: "#155798" }} /> Business process
+            <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: KIND_FILL.process }} /> Business process
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: "#93AFC9" }} /> Response route
+            <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: KIND_FILL.route }} /> Response route
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: "#8496A8" }} /> Route with a declared gap
+            <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: GAP_FILL }} /> Route with a declared gap
           </span>
         </div>
 
@@ -237,11 +238,11 @@ export function RelationshipExplorer() {
 
             <div className="mt-2 flex flex-wrap items-center gap-4 text-[11px] text-ink-600">
               <span className="flex items-center gap-1.5">
-                <svg width="26" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke="#155798" strokeWidth="1.5" /></svg>
+                <svg width="26" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke={PEP[700]} strokeWidth="1.5" /></svg>
                 Edge from an E2 source <EvidenceBadge tier="E2" />
               </span>
               <span className="flex items-center gap-1.5">
-                <svg width="26" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke="#A03535" strokeWidth="1.5" strokeDasharray="4 3" /></svg>
+                <svg width="26" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke={STATUS.bad} strokeWidth="1.5" strokeDasharray="4 3" /></svg>
                 Edge derived from free text <EvidenceBadge tier="E3" />
               </span>
               <span>Hover a node to isolate its edges.</span>

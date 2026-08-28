@@ -4,11 +4,14 @@ import {
   Tooltip, XAxis, YAxis, ReferenceArea, Legend,
 } from "recharts";
 import type { QualityPoint } from "@/types";
+import { CHART, RAMP } from "@/lib/palette";
 
 /* Monochrome ramp from the PepsiCo palette, validated against a white surface:
    the light end clears the 2:1 contrast floor and the lightness gap between steps
-   is >= 0.06 in OKLCH. #DCE8F5 was dropped because it landed at 1.24:1. */
-const C = { rail: "#93AFC9", ink: "#02355A", ref: "#8496A8", mid: "#155798" } as const;
+   is >= 0.06 in OKLCH. pep-300 #9FC2E7 is NOT usable as a bar fill here — it lands
+   at 1.85:1 — so the rail is pep-400 #72A6DD at 2.56:1. #DCE8F5 was dropped
+   earlier for the same reason, at 1.24:1. */
+const C = { rail: RAMP.rail, ink: RAMP.strong, ref: RAMP.reference, mid: RAMP.mid } as const;
 
 /** Quality series. Bar = incident volume (the denominator), line = the rate.
  *  The rate is never drawn without its volume underneath. */
@@ -31,13 +34,13 @@ export function QualitySeries({
     <div className="h-[320px] w-full">
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={points} margin={{ top: 8, right: 8, bottom: 4, left: 0 }}>
-          <CartesianGrid stroke="#EAEEF2" vertical={false} />
-          <XAxis dataKey="period" tick={{ fontSize: 10, fill: "#5B7085" }} minTickGap={24} tickLine={false} axisLine={{ stroke: "#D8DFE6" }} />
-          <YAxis yAxisId="vol" orientation="right" tick={{ fontSize: 10, fill: "#8496A8" }} tickLine={false} axisLine={false} width={52} />
-          <YAxis yAxisId="rate" tick={{ fontSize: 10, fill: "#5B7085" }} tickLine={false} axisLine={{ stroke: "#D8DFE6" }} width={44}
+          <CartesianGrid stroke={CHART.grid} vertical={false} />
+          <XAxis dataKey="period" tick={{ fontSize: 10, fill: CHART.tick }} minTickGap={24} tickLine={false} axisLine={{ stroke: CHART.axis }} />
+          <YAxis yAxisId="vol" orientation="right" tick={{ fontSize: 10, fill: CHART.tickMuted }} tickLine={false} axisLine={false} width={52} />
+          <YAxis yAxisId="rate" tick={{ fontSize: 10, fill: CHART.tick }} tickLine={false} axisLine={{ stroke: CHART.axis }} width={44}
                  domain={unit === "pts" ? [0, 100] : [0, 100]} />
           <Tooltip
-            contentStyle={{ fontSize: 12, borderRadius: 4, border: "1px solid #D8DFE6" }}
+            contentStyle={{ fontSize: 12, borderRadius: 4, border: `1px solid ${CHART.tooltipBorder}` }}
             formatter={(v: unknown, name: unknown) =>
               name === "Incidents"
                 ? [Number(v).toLocaleString("en-US"), "Incidents (denominator)"]
@@ -46,7 +49,7 @@ export function QualitySeries({
           <Legend wrapperStyle={{ fontSize: 11 }} />
           {x1 && x2 ? (
             <ReferenceArea yAxisId="rate" x1={x1} x2={x2} fill={C.ink} fillOpacity={0.06}
-                           label={{ value: "baseline", fontSize: 10, fill: "#5B7085", position: "insideTop" }} />
+                           label={{ value: "baseline", fontSize: 10, fill: CHART.tick, position: "insideTop" }} />
           ) : null}
           <Bar yAxisId="vol" dataKey="incidents" name="Incidents" fill={C.rail} isAnimationActive={false} />
           <Line yAxisId="rate" type="monotone" dataKey={metricKey as string} name={metricLabel}
@@ -63,11 +66,11 @@ export function DecalogueChart({ rows }: { rows: { dcode: string; incidents: num
     <div className="h-[280px] w-full">
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={rows} layout="vertical" margin={{ top: 4, right: 16, bottom: 4, left: 8 }}>
-          <CartesianGrid stroke="#EAEEF2" horizontal={false} />
-          <XAxis type="number" tick={{ fontSize: 10, fill: "#5B7085" }} tickLine={false} axisLine={{ stroke: "#D8DFE6" }} />
-          <YAxis type="category" dataKey="dcode" width={120} tick={{ fontSize: 10, fill: "#33475B" }} tickLine={false} axisLine={false} />
+          <CartesianGrid stroke={CHART.grid} horizontal={false} />
+          <XAxis type="number" tick={{ fontSize: 10, fill: CHART.tick }} tickLine={false} axisLine={{ stroke: CHART.axis }} />
+          <YAxis type="category" dataKey="dcode" width={120} tick={{ fontSize: 10, fill: CHART.tickStrong }} tickLine={false} axisLine={false} />
           <Tooltip
-            contentStyle={{ fontSize: 12, borderRadius: 4, border: "1px solid #D8DFE6" }}
+            contentStyle={{ fontSize: 12, borderRadius: 4, border: `1px solid ${CHART.tooltipBorder}` }}
             formatter={(v: unknown) => [Number(v).toLocaleString("en-US"), "Incidents"]}
           />
           <Bar dataKey="incidents" fill={C.mid} isAnimationActive={false} />
@@ -88,12 +91,12 @@ export function CoverageCompareChart({
     <div className="h-[280px] w-full">
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={rows} margin={{ top: 8, right: 8, bottom: 4, left: 0 }}>
-          <CartesianGrid stroke="#EAEEF2" vertical={false} />
-          <XAxis dataKey="link" tick={{ fontSize: 10, fill: "#33475B" }} tickLine={false} axisLine={{ stroke: "#D8DFE6" }} interval={0} />
-          <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: "#5B7085" }} tickLine={false} axisLine={false}
+          <CartesianGrid stroke={CHART.grid} vertical={false} />
+          <XAxis dataKey="link" tick={{ fontSize: 10, fill: CHART.tickStrong }} tickLine={false} axisLine={{ stroke: CHART.axis }} interval={0} />
+          <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: CHART.tick }} tickLine={false} axisLine={false}
                  tickFormatter={(v: unknown) => `${Number(v)}%`} />
           <Tooltip
-            contentStyle={{ fontSize: 12, borderRadius: 4, border: "1px solid #D8DFE6" }}
+            contentStyle={{ fontSize: 12, borderRadius: 4, border: `1px solid ${CHART.tooltipBorder}` }}
             formatter={(v: unknown, name: unknown, item: unknown) => {
               const p = (item as { payload?: Record<string, string> })?.payload;
               const den = name === "AI/ML" ? p?.subsetLabel : p?.portfolioLabel;
