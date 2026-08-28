@@ -9,13 +9,16 @@
  *   stores:
  *     "meta"    key "current" -> { as_of, sha256, instrument, verified, rows }
  *     "user"    keyPath "Number", index "ag_key", index "Label"
- *     "alert"   keyPath "Number", index "ag_key", index "Ops Classification"
+ *     "alert"   keyPath "Number", index "ag_key", index "ops_class"
+ *
+ * Nota sobre ops_class: el contrato original pedia un indice con keyPath
+ * "Ops Classification". IndexedDB lo rechaza, porque un keyPath no admite
+ * espacios. La columna original sigue en la fila; el indice va sobre la copia.
  * Cada fila lleva ag_key precomputado con el normalizador canónico.
  */
 
-const DB = "xops-corpus";
-/* El lector no fija version a proposito: la ingesta es la duena del esquema y
-   puede subirla. Lo que este archivo exige es la forma, no el numero. */
+import { openExisting } from "@/lib/qn/db";
+
 const norm = (s: string) => String(s).toUpperCase().replace(/[^A-Z0-9]/g, "");
 
 const NOT_LOADED = {
@@ -24,65 +27,6 @@ const NOT_LOADED = {
     "No corpus is loaded in this browser. The user must upload the QN workbook " +
     "first. Do not answer ticket-level questions from any other source.",
 };
-
-/**
- * Abre el corpus SIN crearlo. Es una herramienta de lectura y no debe dejar
- * rastro si no hay nada que leer.
- *
- * La version ingenua, indexedDB.open(DB, VERSION) resolviendo null en
- * onupgradeneeded, tiene dos fallas verificadas en navegador:
- *
- *  1. Deja la base creada. Resolver null en onupgradeneeded reporta "no hay
- *     corpus" pero la transaccion de version sigue su curso, y queda
- *     xops-corpus@1 vacia. Cuando despues la ingesta abre en la version 1,
- *     onupgradeneeded ya NO dispara, asi que no puede crear sus object stores
- *     y se queda con una base sin nada. Basta con que alguien le pregunte algo
- *     al agente antes de cargar el corpus para inutilizar la ingesta.
- *  2. Fija la version. Si la ingesta sube a la version 2, open(DB, 1) lanza
- *     VersionError, esto resolveria null y el agente diria que no hay corpus
- *     teniendolo cargado.
- *
- * Por eso: sin fijar version, y si resulta que la base no existia, se aborta
- * la transaccion de creacion para no dejarla escrita.
- */
-function open(): Promise<IDBDatabase | null> {
-  return new Promise((resolve) => {
-    if (typeof indexedDB === "undefined") return resolve(null);
-
-    let creating = false;
-    const req = indexedDB.open(DB); // sin version: abre la que exista
-
-    req.onupgradeneeded = () => {
-      // Solo llega aqui si la base no existia. Se revierte la creacion.
-      creating = true;
-      try {
-        req.transaction?.abort();
-      } catch {
-        /* el abort ya deja la base sin escribir */
-      }
-    };
-    req.onsuccess = () => {
-      const db = req.result;
-      // Una base sin el store meta no es un corpus cargado, es un resto.
-      if (creating || !db.objectStoreNames.contains("meta")) {
-        db.close();
-        return resolve(null);
-      }
-      resolve(db);
-    };
-    req.onerror = () => {
-      if (creating) {
-        try {
-          indexedDB.deleteDatabase(DB);
-        } catch {
-          /* nada que limpiar */
-        }
-      }
-      resolve(null);
-    };
-    req.onblocked = () => resolve(null);
-  });
-}
 
 function tx<T>(db: IDBDatabase, store: string, fn: (s: IDBObjectStore) => IDBRequest): Promise<T | null> {
   return new Promise((resolve) => {
@@ -125,7 +69,7 @@ async function scan(
 }
 
 export async function runClientTool(name: string, input: any): Promise<unknown> {
-  const db = await open();
+  const db = await openExisting();
   if (!db) return NOT_LOADED;
 
   const meta = await tx<any>(db, "meta", (s) => s.get("current"));

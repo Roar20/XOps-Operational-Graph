@@ -178,25 +178,31 @@ Fuente: `7773fc71-XOps_Operational_Graph_Semantic_Layer_v3.xlsx` (287 KB).
 
 ## 4. Workstream abierto: corpus QN v2.4.2 (segundo proyector)
 
-### 🚫 BLOQUEO ACTUAL
+### ✅ BLOQUEO RESUELTO
 
-Los dos archivos **no están en disco**. `data/` sólo contiene
-`xops-operational-graph-data.json`. Reverificado en la sesión de la paleta: no
-están en `data/`, ni en el working tree, ni en ningún otro punto del contenedor.
-Aparecieron sólo pegados en un chat, y un chat nuevo no hereda esa conversación,
-así que **hay que subirlos al repo desde una máquina que los tenga**. Nadie los
-puede reconstruir desde aquí: son medición, no derivación, y el contrato del
-proyecto prohíbe inventar columnas o conteos.
+Los dos archivos **ya no se pegan a mano: se generan**. Llegó un libro real
+(`QN_p120826_SAMPLE_2_4_2_RO.xlsx`) y de ahí sale todo:
 
-Antes de escribir una línea de código hay que colocar:
-
-```
-data/QN_v242_contract.json     (24 KB)   manifiesto medido contra el archivo real
-data/QN_v242_aggregates.json   (911 KB)  9 hojas agregadas, 3,473 filas, dato real
+```bash
+npm run qn -- RUTA_DEL_LIBRO.xlsx     # scripts/build_qn_aggregates.py
+# escribe data/QN_v242_aggregates.json  (587 KB)
+#         data/QN_v242_contract.json    (6 KB, el manifiesto)
 ```
 
-**Leerlos antes de programar.** No inventar columnas ni conteos: si no está en el
-contrato, no está en el archivo.
+**Por qué un libro de muestra puede producir agregados reales.** Las hojas de
+detalle vienen muestreadas a 500 filas, pero **las hojas agregadas cubren el
+corpus completo**. Eso no se asume, se verifica y el build se detiene si no
+cuadra: `User_By_Group` suma exactamente **277,408** en 987 grupos y
+`Alert_By_Group` suma exactamente **442,538** en 315, que es la población que
+declara la hoja Overview. Un libro cuyos agregados vinieran de una muestra
+rompería QN03 y QN04 y no escribiría nada.
+
+Todo lo que este documento afirmaba quedó confirmado contra el archivo:
+D01 **+640.2%**, D05 **-49.0%**, Poor × FORMAL_ONLY **50.7%**, cumplimiento
+**96.1%** contra objetivo **30%**, eje diagnóstico **25.7%**.
+
+El libro fuente **no se versiona**, igual que el xlsx de la capa semántica. Lo
+versionado es el JSON.
 
 ### El corpus
 
@@ -305,16 +311,11 @@ components/AgentChat.tsx    la interfaz embebible
 Dependencias: `ai@7`, `@ai-sdk/react@4`, `zod@4`. Variable única:
 `AI_GATEWAY_API_KEY`. No hace falta `@ai-sdk/anthropic` ni llave de Anthropic.
 
-### 🚫 No compila todavía
+### ✅ Compila
 
-```
-Module not found: Can't resolve '@/data/QN_v242_aggregates.json'
-```
-
-`lib/agent/tools.ts` lo importa. Es el mismo archivo del bloqueo de la sección 4:
-**sigue sin estar en el repo.** Verificado con un stub desechable: con el archivo
-presente, typecheck limpio, build de 516 rutas y **46/46** aserciones siguen
-pasando. El stub se borró; no hay dato inventado en `data/`.
+El import de `data/QN_v242_aggregates.json` que rompía el despliegue ya está
+satisfecho con dato real, generado por el proyector de la sección 4. typecheck
+limpio, build de **517 rutas**, **46/46** aserciones.
 
 ### Dos fallas corregidas al colocarlo, ambas verificadas en navegador
 
@@ -435,7 +436,70 @@ controles HUD del grafo.
 
 ---
 
-## 7. Seguimientos pendientes (ofrecidos, sin cerrar)
+## 7. Sección de carga de datos (hecha)
+
+Es el entregable **A** del workstream, el portero, y la **C**, la ingesta en
+runtime. Ruta `/upload`, en `Nav.tsx` como *Load Data*.
+
+```
+scripts/build_qn_aggregates.py  proyector: libro -> agregados + manifiesto
+lib/qn/types.ts                 contrato entre worker e interfaz
+lib/qn/db.ts                    lectura de IndexedDB, compartida con el agente
+lib/qn/ingest.worker.ts         Web Worker: parsea, valida e indexa
+components/CorpusUpload.tsx     la sección de carga
+app/upload/page.tsx             la ruta
+```
+
+**El validador corre antes de escribir una sola fila.** Compara el archivo
+contra `data/QN_v242_contract.json`: hojas presentes y contrato de columnas por
+hoja, con las de banner exentas porque no tienen encabezado tabular. El reporte
+dice qué hoja, qué columnas faltan, cuántas filas se descartaron y por qué.
+
+**Dos veredictos, no uno.** Fue la decisión de diseño de esta sesión:
+
+| Veredicto | Qué significa | Consecuencia |
+|---|---|---|
+| `verified` | la estructura es la del corpus | **sin esto no se estampa el corte** |
+| `complete` | además el volumen iguala la población declarada | sin esto las cifras se rotulan *muestra* |
+
+Un binario habría obligado a rechazar el archivo de muestra, que es justo el que
+se quiere cargar para analizar. Con dos, la muestra se indexa y se usa, y sus
+cifras dicen que describen las filas cargadas y no la población. Probado de
+punta a punta en navegador con el archivo real: `verified: true`,
+`complete: false`, corte `2026-08-12` estampado, 500 + 500 filas indexadas.
+
+Nada sube a un servidor. El detalle se queda en IndexedDB de quien lo carga.
+
+### Dos fallas del contrato original, encontradas al implementarlo
+
+**1. El índice `Ops Classification` no existe y no puede existir.** El contrato
+que traía este documento pedía `alert … index "Ops Classification"`. IndexedDB
+rechaza un keyPath con espacios: *"The keyPath argument contains an invalid key
+path"*. Cada fila de alerta lleva ahora `ops_class` precomputado y el índice va
+sobre ese campo; la columna original se conserva intacta en la fila.
+
+**2. El fallo se colgaba en silencio.** El error ocurría dentro de
+`onupgradeneeded`, fuera del `try/catch`, así que la promesa nunca resolvía ni
+rechazaba: la barra de progreso se quedaba quieta sin decir nada. Ahora el
+handler captura, aborta la transacción y rechaza con el mensaje.
+
+`lib/agent/client-tools.ts` dejó de tener su propia copia de la apertura de
+IndexedDB y usa `lib/qn/db.ts`, para que no puedan divergir.
+
+### Lo que queda de este workstream
+
+- **B**, el proyector de agregados, existe pero la app todavía no consume
+  `QN_v242_aggregates.json` en pantalla: hoy sólo lo leen las herramientas de
+  servidor del agente. Falta integrarlo a `types/index.ts` **extendiendo** el
+  tipo, no reemplazándolo.
+- **D**, la ficha de ticket en `/ticket/[number]`, sin empezar. La ingesta ya
+  deja el dato indexado por `Number`, así que el eslabón que faltaba está.
+- El análisis visual sobre el corpus cargado: hoy `/upload` reporta la validación
+  y deja el detalle consultable por el agente, pero no dibuja todavía.
+
+---
+
+## 8. Seguimientos pendientes (ofrecidos, sin cerrar)
 
 - Conseguir un extracto a grano de incidente para encender `IncidentRow` en la capa
   semántica *(parcialmente resuelto por el corpus QN)*

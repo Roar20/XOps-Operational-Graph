@@ -42,6 +42,7 @@ const ACTIONS: Item[] = [
   { id: "go-quality", group: "Go to", label: "Work Notes Quality", href: "/quality" },
   { id: "go-aiops", group: "Go to", label: "AI Ops", href: "/ai-ops" },
   { id: "go-agent", group: "Go to", label: "Operational Agent", href: "/agent" },
+  { id: "go-upload", group: "Go to", label: "Load Data · QN corpus", href: "/upload" },
 
   {
     id: "f-not-routable",

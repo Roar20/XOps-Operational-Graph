@@ -10,6 +10,7 @@ const LINKS = [
   { href: "/graph", label: "Relationships" },
   { href: "/quality", label: "Work Notes Quality" },
   { href: "/ai-ops", label: "AI Ops" },
+  { href: "/upload", label: "Load Data" },
 ];
 
 export function Nav() {
