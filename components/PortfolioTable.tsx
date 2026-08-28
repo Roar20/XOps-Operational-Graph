@@ -1,5 +1,6 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
   applications, computeGaps, filterApps, EMPTY_FILTERS, PROCESS_OPTIONS, SECTOR_OPTIONS,
   SCOPE_OPTIONS, CRITICALITY_OPTIONS, PLATFORM_OPTIONS, UNIVERSE, type Filters,
@@ -9,8 +10,21 @@ import { AiTag, AppLink, CriticalityChip, GateChips, NotRoutableTag, SupportLoad
 import { InlineMetric, Metric } from "./Metric";
 import { Note, SectionHeader, TableCaption } from "./SectionHeader";
 import { Trace } from "./Trace";
+import { AppInspector } from "./AppInspector";
 
 type SortKey = "name" | "criticality" | "platforms" | "ags" | "tickets" | "process" | "sector";
+type Density = "compact" | "comfortable";
+
+/* Densidad. Compacta para quien recorre cientos de filas buscando un patron,
+   comoda para quien lee una seleccion ya reducida. La preferencia se recuerda
+   por navegador: es una comodidad de quien mira, no un dato del modelo. */
+const DENSITY_KEY = "xog:density";
+
+/* Los filtros tambien entran por query string, que es como la paleta de
+   comandos abre la tabla ya filtrada. Se lee de window.location igual que
+   BlastRadius lee ?p=, para no obligar a una frontera de Suspense en una ruta
+   preprerenderizada. Un valor que no exista se ignora, no rompe la vista. */
+const URL_KEYS = ["q", "process", "sector", "criticality", "scope", "platform", "gate"] as const;
 const CRIT_ORDER: Record<Criticality, number> = { C1: 0, C2: 1, C3: 2, "C-": 3 };
 const PAGE = 60;
 
@@ -21,6 +35,37 @@ export function PortfolioTable({
   const [sort, setSort] = useState<SortKey>("name");
   const [desc, setDesc] = useState(false);
   const [limit, setLimit] = useState(PAGE);
+  const [density, setDensity] = useState<Density>("compact");
+  const [inspect, setInspect] = useState<Application | null>(null);
+
+  /* Preseleccion por query string y densidad recordada. Las dos cosas se leen
+     despues de montar, de modo que el HTML servido es siempre el mismo. */
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    const next: Partial<Filters> = {};
+    for (const k of URL_KEYS) {
+      const v = sp.get(k);
+      if (v) next[k] = v;
+    }
+    if (sp.get("ai") === "1") next.aiOnly = true;
+    if (Object.keys(next).length) setF((prev) => ({ ...prev, ...next }));
+
+    const saved = localStorage.getItem(DENSITY_KEY);
+    if (saved === "compact" || saved === "comfortable") setDensity(saved);
+  }, []);
+
+  const chooseDensity = (d: Density) => {
+    setDensity(d);
+    try {
+      localStorage.setItem(DENSITY_KEY, d);
+    } catch {
+      /* modo privado: la preferencia simplemente no sobrevive a la recarga */
+    }
+  };
+
+  const TD = density === "compact"
+    ? "whitespace-nowrap px-3 py-1 text-[13px] text-ink-900"
+    : "whitespace-nowrap px-3 py-2.5 text-sm text-ink-900";
 
   const set = <K extends keyof Filters>(k: K, v: Filters[K]) => {
     setF((p) => ({ ...p, [k]: v })); setLimit(PAGE);
@@ -65,6 +110,7 @@ export function PortfolioTable({
 
   return (
     <div className="space-y-4">
+      <AppInspector app={inspect} onClose={() => setInspect(null)} />
       {showGaps ? (
         <section className="card card-pad border-ev-e2/40 bg-ev-e2/[0.05]">
           <SectionHeader kicker="Pinned panel · computed from the data" title="Declared gap">
@@ -99,6 +145,16 @@ export function PortfolioTable({
             <span className="subtle">
               Showing <InlineMetric resolved={filtered.length} universe={pool.length} />
             </span>
+            <div className="inline-flex overflow-hidden rounded border border-ink-300" role="group" aria-label="Row density">
+              {(["compact", "comfortable"] as const).map((d) => (
+                <button key={d} type="button" onClick={() => chooseDensity(d)} aria-pressed={density === d}
+                  className={`px-2.5 py-1.5 text-xs font-medium transition ${
+                    density === d ? "bg-pep-900 text-white" : "bg-white text-ink-700 hover:bg-pep-50"
+                  }`}>
+                  {d === "compact" ? "Compact" : "Comfortable"}
+                </button>
+              ))}
+            </div>
             {active > 0 ? (
               <button type="button" className="btn" onClick={() => { setF(EMPTY_FILTERS); setLimit(PAGE); }}>
                 Clear filters
@@ -159,9 +215,14 @@ export function PortfolioTable({
         ) : null}
 
         <div className="card overflow-hidden">
-          <div className="scroll-thin overflow-x-auto">
+          {/* Contenedor con altura acotada y scroll propio: es lo que hace que
+              el thead sticky funcione. Con solo overflow-x el div ya es
+              contenedor de scroll en los dos ejes, pero sin altura limitada no
+              hay nada contra que pegarse y la cabecera se va con la pagina.
+              Misma forma que AiOps y QualityModule. */}
+          <div className="scroll-thin max-h-[70vh] overflow-auto">
             <table className="w-full border-collapse">
-              <thead className="border-b border-ink-200 bg-pep-50">
+              <thead className="sticky top-0 z-10 border-b border-ink-200 bg-pep-50">
                 <tr>
                   {th("name", "Application")}
                   <th className="th">APM</th>
@@ -173,33 +234,63 @@ export function PortfolioTable({
                   {th("ags", "AGs")}
                   {th("tickets", "Support load")}
                   <th className="th">Gates</th>
+                  <th className="th text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-ink-100">
                 {sorted.slice(0, limit).map((a) => (
-                  <tr key={a.app_id} className="row-hover align-middle">
-                    <td className="td max-w-[300px]">
+                  /* La fila abre el inspector. El nombre sigue siendo un enlace
+                     real, asi que detiene la propagacion: quien quiera la ficha
+                     completa la abre en una pestana, quien quiera mirar sin
+                     salir de la pantalla usa el drawer. */
+                  <tr key={a.app_id} onClick={() => setInspect(a)}
+                      className="group cursor-pointer align-middle transition hover:bg-pep-50">
+                    <td className={`${TD} max-w-[300px]`}>
                       <div className="flex items-center gap-1.5">
-                        <span className="truncate"><AppLink appId={a.app_id} name={a.name} /></span>
+                        <span className="truncate" onClick={(e) => e.stopPropagation()}>
+                          <AppLink appId={a.app_id} name={a.name} />
+                        </span>
                         {a.is_ai_ml ? <AiTag /> : null}
                       </div>
+                      {density === "comfortable" ? (
+                        <div className="subtle num mt-0.5 truncate">
+                          {a.scope_status || "scope not captured"}
+                          {a.sectors.length > 1 ? ` · ${a.sectors.length} sectors` : ""}
+                          {a.declared_reports ? ` · ${a.declared_reports} declared reports` : ""}
+                        </div>
+                      ) : null}
                     </td>
-                    <td className="num td text-ink-500">{a.apm || <TbdValue value={null} />}</td>
-                    <td className="td max-w-[160px] truncate"><TbdValue value={a.process} /></td>
-                    <td className="td max-w-[150px] truncate"><TbdValue value={a.sector} /></td>
-                    <td className="td"><CriticalityChip value={a.criticality} /></td>
-                    <td className="td max-w-[160px] truncate"><TbdValue value={a.dpm} /></td>
-                    <td className="num td">{a.platforms.length || <span className="text-ink-400">0</span>}</td>
-                    <td className="td">
+                    <td className={`num ${TD} text-ink-500`}>{a.apm || <TbdValue value={null} />}</td>
+                    <td className={`${TD} max-w-[160px] truncate`}><TbdValue value={a.process} /></td>
+                    <td className={`${TD} max-w-[150px] truncate`}><TbdValue value={a.sector} /></td>
+                    <td className={TD}><CriticalityChip value={a.criticality} /></td>
+                    <td className={`${TD} max-w-[160px] truncate`}><TbdValue value={a.dpm} /></td>
+                    <td className={`num ${TD}`}>{a.platforms.length || <span className="text-ink-400">0</span>}</td>
+                    <td className={TD}>
                       {a.ags.length > 0 ? <span className="num">{a.ags.length}</span> : <NotRoutableTag />}
                     </td>
                     {/* No traffic light: one colour whatever the volume. */}
-                    <td className="td"><SupportLoad value={a.tickets_2024} /></td>
-                    <td className="td"><GateChips gates={a.gates} /></td>
+                    <td className={TD}><SupportLoad value={a.tickets_2024} /></td>
+                    <td className={TD}><GateChips gates={a.gates} /></td>
+                    <td className={`${TD} text-right`} onClick={(e) => e.stopPropagation()}>
+                      {/* Visibles al enfocar con teclado, no solo al pasar el cursor. */}
+                      <span className="inline-flex gap-1 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
+                        <button type="button" onClick={() => setInspect(a)}
+                          className="rounded border border-ink-300 bg-white px-1.5 py-0.5 text-[11px] font-medium text-ink-700 hover:border-pep-500 hover:text-pep-700">
+                          Inspect
+                        </button>
+                        {a.platforms.length > 0 ? (
+                          <Link href={`/blast-radius?p=${encodeURIComponent(a.platforms[0])}`}
+                            className="rounded border border-ink-300 bg-white px-1.5 py-0.5 text-[11px] font-medium text-ink-700 hover:border-pep-500 hover:text-pep-700">
+                            Blast radius
+                          </Link>
+                        ) : null}
+                      </span>
+                    </td>
                   </tr>
                 ))}
                 {sorted.length === 0 ? (
-                  <tr><td colSpan={10} className="td py-8 text-center text-ink-500">
+                  <tr><td colSpan={11} className="td py-8 text-center text-ink-500">
                     No application matches these filters.
                   </td></tr>
                 ) : null}

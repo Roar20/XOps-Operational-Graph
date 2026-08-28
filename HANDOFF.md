@@ -178,25 +178,31 @@ Fuente: `7773fc71-XOps_Operational_Graph_Semantic_Layer_v3.xlsx` (287 KB).
 
 ## 4. Workstream abierto: corpus QN v2.4.2 (segundo proyector)
 
-### 🚫 BLOQUEO ACTUAL
+### ✅ BLOQUEO RESUELTO
 
-Los dos archivos **no están en disco**. `data/` sólo contiene
-`xops-operational-graph-data.json`. Reverificado en la sesión de la paleta: no
-están en `data/`, ni en el working tree, ni en ningún otro punto del contenedor.
-Aparecieron sólo pegados en un chat, y un chat nuevo no hereda esa conversación,
-así que **hay que subirlos al repo desde una máquina que los tenga**. Nadie los
-puede reconstruir desde aquí: son medición, no derivación, y el contrato del
-proyecto prohíbe inventar columnas o conteos.
+Los dos archivos **ya no se pegan a mano: se generan**. Llegó un libro real
+(`QN_p120826_SAMPLE_2_4_2_RO.xlsx`) y de ahí sale todo:
 
-Antes de escribir una línea de código hay que colocar:
-
-```
-data/QN_v242_contract.json     (24 KB)   manifiesto medido contra el archivo real
-data/QN_v242_aggregates.json   (911 KB)  9 hojas agregadas, 3,473 filas, dato real
+```bash
+npm run qn -- RUTA_DEL_LIBRO.xlsx     # scripts/build_qn_aggregates.py
+# escribe data/QN_v242_aggregates.json  (587 KB)
+#         data/QN_v242_contract.json    (6 KB, el manifiesto)
 ```
 
-**Leerlos antes de programar.** No inventar columnas ni conteos: si no está en el
-contrato, no está en el archivo.
+**Por qué un libro de muestra puede producir agregados reales.** Las hojas de
+detalle vienen muestreadas a 500 filas, pero **las hojas agregadas cubren el
+corpus completo**. Eso no se asume, se verifica y el build se detiene si no
+cuadra: `User_By_Group` suma exactamente **277,408** en 987 grupos y
+`Alert_By_Group` suma exactamente **442,538** en 315, que es la población que
+declara la hoja Overview. Un libro cuyos agregados vinieran de una muestra
+rompería QN03 y QN04 y no escribiría nada.
+
+Todo lo que este documento afirmaba quedó confirmado contra el archivo:
+D01 **+640.2%**, D05 **-49.0%**, Poor × FORMAL_ONLY **50.7%**, cumplimiento
+**96.1%** contra objetivo **30%**, eje diagnóstico **25.7%**.
+
+El libro fuente **no se versiona**, igual que el xlsx de la capa semántica. Lo
+versionado es el JSON.
 
 ### El corpus
 
@@ -288,7 +294,220 @@ tasa de población de Close-Notes.
 
 ---
 
-## 5. Seguimientos pendientes (ofrecidos, sin cerrar)
+## 5. Agente operativo sobre AI Gateway (colocado, no desplegable aún)
+
+Cinco archivos en el repo, más una ruta propia:
+
+```
+app/api/chat/route.ts       endpoint, Claude Sonnet 4.6 vía AI Gateway
+app/agent/page.tsx          ruta propia. NO está en Nav.tsx: dónde vive el
+                            agente es decisión de producto
+lib/agent/system-prompt.ts  las reglas R1–R10 que el agente no puede romper
+lib/agent/tools.ts          5 herramientas de servidor + 4 de cliente
+lib/agent/client-tools.ts   ejecutor contra IndexedDB
+components/AgentChat.tsx    la interfaz embebible
+```
+
+Dependencias: `ai@7`, `@ai-sdk/react@4`, `zod@4`. Variable única:
+`AI_GATEWAY_API_KEY`. No hace falta `@ai-sdk/anthropic` ni llave de Anthropic.
+
+### ✅ Compila
+
+El import de `data/QN_v242_aggregates.json` que rompía el despliegue ya está
+satisfecho con dato real, generado por el proyector de la sección 4. typecheck
+limpio, build de **517 rutas**, **46/46** aserciones.
+
+### Dos fallas corregidas al colocarlo, ambas verificadas en navegador
+
+**1. El lector de IndexedDB creaba la base y dejaba inservible la ingesta.**
+`open()` abría con `indexedDB.open("xops-corpus", 1)` y resolvía `null` en
+`onupgradeneeded` para reportar "no hay corpus". Pero la transacción de versión
+seguía su curso y dejaba `xops-corpus@1` vacía. Medido: después de esa llamada
+la base existe, y cuando la ingesta reabre en la versión 1 **`onupgradeneeded`
+ya no dispara**, así que no puede crear sus object stores y se queda con
+`objectStores = []`. Bastaba con preguntarle algo al agente antes de cargar el
+corpus para inutilizar la ingesta. Ahora abre sin fijar versión, aborta la
+transacción si resulta que la base no existía, y exige el store `meta`.
+Comprobado en tres escenarios: sin corpus deja **cero** bases; con corpus en v1
+lo lee; con corpus en v2 también lo lee, cosa que la versión anterior no hacía
+porque `open(DB, 1)` contra una v2 lanza `VersionError`.
+
+**2. `temperature: 0` rompía la lista de respaldo.** Sonnet 4.6 acepta
+`temperature`; **Sonnet 5 y Opus 5 la rechazan con 400** — el parámetro de
+muestreo desapareció en esa familia. Con `temperature: 0` los dos modelos de
+respaldo fallan, que es exactamente lo que la lista existe para evitar. Se quitó.
+Lo que fija la conducta es el system prompt, no el sampler.
+
+### Alineado al contrato del repo
+
+`AgentChat.tsx` venía en español dentro de un shell inglés. La regla de la
+sección 2 dice que **la interfaz está en inglés**; se tradujeron las once cadenas
+visibles. Los comentarios siguen en español, como el resto de `lib/`.
+
+### Abierto, decisión del usuario
+
+| Qué | Estado |
+|---|---|
+| `data/QN_v242_aggregates.json` | **bloquea el build**. Subirlo. |
+| Slug del modelo en Gateway | `anthropic/claude-sonnet-4.6` no se pudo verificar: el egress a `vercel.com` está bloqueado en el contenedor. Confirmar contra el catálogo de Gateway antes de desplegar. |
+| `providerOptions.anthropic.effort` | Sin llave no se puede comprobar que Gateway lo reenvíe. En la API cruda `effort` vive en `output_config`, no suelto. |
+| Proteger `/api/chat` | Hoy público. `MAX_MESSAGES` 40 es lo único que hay. Vercel Authentication primero, límite por IP después. |
+| `assignment_group_profile` sin tope | `user_by_group` y `alert_by_group` se devuelven completos; sólo `decalogue` está topado en 20. Una consulta corta como "SAP" puede devolver cientos de filas al modelo. `decalogue` da el precedente del tope. |
+| La cabecera del chat afirma "Claude Sonnet 4.6" | Si Gateway enruta al respaldo, la interfaz nombra un modelo que no respondió. Es una afirmación sin verificar, del tipo que este proyecto no publica. |
+| `/agent` fuera de `Nav.tsx` | Agregar `{ href: "/agent", label: "Agent" }` a `LINKS` si se quiere en la navegación. |
+| Ingesta a IndexedDB | No existe todavía. El contrato de stores está escrito arriba de `lib/agent/client-tools.ts`. |
+
+---
+
+## 6. Capa de interacción (hecha)
+
+Primera de las cinco capas del brief de observabilidad. Se eligió esta primero
+porque no depende del tema ni de datos nuevos.
+
+```
+components/CommandPalette.tsx   paleta ⌘K. Reemplaza a GlobalSearch.tsx, eliminado
+components/Drawer.tsx           slide-over lateral genérico
+components/AppInspector.tsx     contenido del drawer para una aplicación
+components/PortfolioTable.tsx   densidad, sticky, acciones al hover, drawer, ?params
+```
+
+**La paleta no sólo busca, navega a pantallas ya filtradas.** Cada acción de
+filtro lleva su denominador en la propia lista (`192 of 504 · not routable`), y
+viaja por query string: `?gate=`, `?criticality=`, `?ai=1`, `?platform=`. Los lee
+`PortfolioTable` desde `window.location`, la misma convención que `BlastRadius`
+ya usaba para `?p=`, de modo que una ruta preprerenderizada no necesita frontera
+de Suspense. Verificado: `/portfolio?gate=not-routable` abre en **192 de 504**.
+
+La paleta tapa la barra de corte mientras está abierta, así que **repite el
+corte y el universo en su pie**. El sello no desaparece detrás de un overlay.
+
+**El drawer es subconjunto de `/app/[app_id]`, nunca una versión distinta.** Lo
+que no cabe se enlaza. Un resumen que afirme algo que la ficha completa no dice
+sería una segunda fuente de verdad. Incluye el bloque *What this card cannot
+answer*, que se arma por fila: historial de incidentes y tiempo de resolución
+siempre, más DPM sin confirmar, sin AG o sin criticidad cuando aplican.
+
+### Una falla propia, encontrada al medirla
+
+El `thead` sticky que agregué **no se pegaba**. El contenedor tenía sólo
+`overflow-x-auto`, y basta con que un eje no sea `visible` para que el div sea
+contenedor de scroll en los dos: el `thead` se pegaba contra un contenedor sin
+altura, o sea contra nada. Medido: tras scrollear, `thead y = -175.75`, fuera de
+pantalla. Corregido con `max-h-[70vh] overflow-auto`, la misma forma que ya usan
+`AiOps` y `QualityModule`. Vuelto a medir: cabecera pegada al borde del
+contenedor.
+
+> **Nota de método.** Una corrida del verificador falló con un timeout que
+> parecía regresión. No lo era: había servers viejos de `next start` vivos,
+> sirviendo un build anterior, y los assets daban 400. Es exactamente el fallo
+> fantasma que advierte la sección 2. **Matar todo `next` antes de verificar.**
+
+typecheck limpio, build de 516 rutas, **46/46** aserciones.
+
+### Lo que del brief NO se construyó, y por qué
+
+Cinco features piden datos que no existen en el modelo. Verificado contra el
+JSON, no supuesto:
+
+| Pedido | Qué hay realmente |
+|---|---|
+| Métrica en vivo por nodo (latencia, error rate) | **Cero** campos de telemetría en el modelo |
+| Sparklines de 24h | Granularidad más fina: **semana**, 138 puntos. Y son del corpus completo: **0 de 504** apps tiene serie propia |
+| Aristas animadas por tráfico activo | No hay tráfico. Las aristas son evidencia E2/E3 de una hoja |
+| Semáforo de salud por nodo | **324 de 504 (64%)** sin criticidad declarada, y criticidad es atributo de diseño, no estado |
+| Camino crítico en simulación de impacto | Blast radius es unión de conjuntos deduplicada, no simulación. R4 prohíbe sumarla |
+
+Construirlas haría que la interfaz aparente observabilidad en vivo sobre un corte
+estático con cobertura parcial declarada. Choca con R3 y R6.
+
+### Pendiente del brief, decidido y sin construir
+
+Modo oscuro **derivado de marca**: conserva las anclas PepsiCo y sube los estados
+a `#34D399`, `#E8A33D`, `#E86A6A`, más `pep-400` y `pep-300`. Los cinco pasan AA
+sobre `#0B0F17`, `#111827` y `#1F2937`. Medido, sin construir todavía.
+
+Por qué no se adoptó la paleta del brief tal cual: `#6366F1` reprueba AA en las
+tres superficies (4.29 / 3.97 / 3.29) y `#EF4444` reprueba en la flotante (3.90),
+pese a que el brief afirma AA. Y los estados de marca actuales **no sobreviven**
+un fondo oscuro: sobre `#111827` miden 3.37, 4.19 y 2.58.
+
+Faltan también: glassmorphism en la nav, bordes superiores de acento, minimapa y
+controles HUD del grafo.
+
+---
+
+## 7. El libro es la fuente de verdad (hecho)
+
+Se elimino la dependencia de JSON pregenerado. `data/` vuelve a tener un solo
+archivo: el de la capa semantica. No hay paso previo que correr.
+
+```
+lib/qn/contract.ts        contrato en codigo: forma esperada, NUNCA cifras
+lib/qn/ingest.worker.ts   parsea, valida, clasifica alcance, deriva e indexa
+lib/qn/corpus.tsx         proveedor React; regla de autoridad y procedencia
+lib/qn/db.ts              lectura de IndexedDB, compartida
+components/CorpusUpload.tsx    carga, datasets e invariantes
+components/CorpusAnalysis.tsx  analisis sobre el corpus cargado
+```
+
+`scripts/build_qn_aggregates.py` queda como utilidad de depuracion. **No es
+requisito para que la app corra.**
+
+### El alcance es por dataset, no por libro
+
+Cada hoja se somete a su propia prueba de cobertura contra la poblacion que
+declara Overview. Nada esta escrito en el codigo. Resultado medido con el libro
+de muestra:
+
+| Hoja | Alcance | Probado por |
+|---|---|---|
+| `User_By_Group`, `Alert_By_Group` | **Full corpus** | la suma de su columna iguala la poblacion |
+| `Dual_Axis` | **Full corpus** | su fila Total iguala la poblacion |
+| `By_Decalogue` | **Full corpus** | su Summary declara el denominador `/ 277,408` |
+| `Compliance_*`, `Decalogue_Validation` | **Full corpus** | declaran su propia poblacion adentro |
+| `User_Detail`, `Alert_Detail` | **Sample** | 500 filas contra la poblacion declarada |
+| `Decalogue_By_Group` | **Scope unknown** | no declara denominador: no se asume |
+
+Regla de autoridad: las cifras de poblacion salen de la hoja agregada que cubre
+el corpus, nunca del detalle muestreado. Cada bloque de la interfaz declara su
+hoja de origen, su alcance y su calculo en el panel *Source*.
+
+### Dos correcciones que impuso el libro real
+
+**El libro NO declara un corte de datos.** `2026-08-13 14:17` en Overview es la
+hora en que se genero el reporte. El corte `2026-08-12` venia del handoff, no
+del archivo. La app ya no lo estampa: dice *cut-off not declared* y publica la
+hora de generacion por separado. Una fecha en pantalla es una afirmacion, y esa
+no estaba respaldada.
+
+**El detalle muestreado no es aleatorio.** `Closed At` de las 500 filas va de
+**2024-01-02 a 2024-01-20**. Se publica el rango como observacion junto al
+conteo. Es una razon mas para no derivar poblacion de ahi.
+
+### By_Decalogue: dos medidas, no una con aviso
+
+`classifiedIncidents` **35,814** (unidad: incidente) y `codeOccurrences`
+**39,320** (unidad: ocurrencia), con el sobreconteo **3,506** publicado aparte.
+La interfaz nunca presenta 39,320 como poblacion.
+
+### Invariantes, ahora en tres clases
+
+Las trece siguen. `structural` decide si se estampa el corte; `population` y
+`semantic` marcan los datasets que protegen como no verificados sin repararlos
+en silencio. 13/13 pasan con este libro.
+
+### Conflicto que queda abierto
+
+`/quality` muestra dos fuentes en una escalera de autoridad, no dos caminos.
+Arriba el libro cargado. Abajo la proyeccion QN que la capa semantica trae
+embebida, que sigue siendo la unica capaz de responder **serie temporal** y
+**firmas recurrentes a escala de poblacion**: el libro no trae hoja temporal y su
+`Short Description` solo existe en el detalle muestreado. Recalcular esas dos
+desde 500 filas seria presentar una muestra como poblacion.
+
+---
+
+## 8. Seguimientos pendientes (ofrecidos, sin cerrar)
 
 - Conseguir un extracto a grano de incidente para encender `IncidentRow` en la capa
   semántica *(parcialmente resuelto por el corpus QN)*
