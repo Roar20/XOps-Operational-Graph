@@ -3,7 +3,7 @@ import Link from "next/link";
 import "./globals.css";
 import { meta } from "@/lib/data";
 import { Nav } from "@/components/Nav";
-import { GlobalSearch } from "@/components/GlobalSearch";
+import { CommandPalette } from "@/components/CommandPalette";
 import { RulesPanel } from "@/components/RulesPanel";
 
 export const metadata: Metadata = {
@@ -27,7 +27,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </Link>
             <Nav />
             <div className="ml-auto flex flex-1 items-center justify-end gap-3">
-              <GlobalSearch />
+              <CommandPalette />
               <RulesPanel />
             </div>
           </div>

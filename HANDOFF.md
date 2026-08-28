@@ -358,7 +358,84 @@ visibles. Los comentarios siguen en español, como el resto de `lib/`.
 
 ---
 
-## 6. Seguimientos pendientes (ofrecidos, sin cerrar)
+## 6. Capa de interacción (hecha)
+
+Primera de las cinco capas del brief de observabilidad. Se eligió esta primero
+porque no depende del tema ni de datos nuevos.
+
+```
+components/CommandPalette.tsx   paleta ⌘K. Reemplaza a GlobalSearch.tsx, eliminado
+components/Drawer.tsx           slide-over lateral genérico
+components/AppInspector.tsx     contenido del drawer para una aplicación
+components/PortfolioTable.tsx   densidad, sticky, acciones al hover, drawer, ?params
+```
+
+**La paleta no sólo busca, navega a pantallas ya filtradas.** Cada acción de
+filtro lleva su denominador en la propia lista (`192 of 504 · not routable`), y
+viaja por query string: `?gate=`, `?criticality=`, `?ai=1`, `?platform=`. Los lee
+`PortfolioTable` desde `window.location`, la misma convención que `BlastRadius`
+ya usaba para `?p=`, de modo que una ruta preprerenderizada no necesita frontera
+de Suspense. Verificado: `/portfolio?gate=not-routable` abre en **192 de 504**.
+
+La paleta tapa la barra de corte mientras está abierta, así que **repite el
+corte y el universo en su pie**. El sello no desaparece detrás de un overlay.
+
+**El drawer es subconjunto de `/app/[app_id]`, nunca una versión distinta.** Lo
+que no cabe se enlaza. Un resumen que afirme algo que la ficha completa no dice
+sería una segunda fuente de verdad. Incluye el bloque *What this card cannot
+answer*, que se arma por fila: historial de incidentes y tiempo de resolución
+siempre, más DPM sin confirmar, sin AG o sin criticidad cuando aplican.
+
+### Una falla propia, encontrada al medirla
+
+El `thead` sticky que agregué **no se pegaba**. El contenedor tenía sólo
+`overflow-x-auto`, y basta con que un eje no sea `visible` para que el div sea
+contenedor de scroll en los dos: el `thead` se pegaba contra un contenedor sin
+altura, o sea contra nada. Medido: tras scrollear, `thead y = -175.75`, fuera de
+pantalla. Corregido con `max-h-[70vh] overflow-auto`, la misma forma que ya usan
+`AiOps` y `QualityModule`. Vuelto a medir: cabecera pegada al borde del
+contenedor.
+
+> **Nota de método.** Una corrida del verificador falló con un timeout que
+> parecía regresión. No lo era: había servers viejos de `next start` vivos,
+> sirviendo un build anterior, y los assets daban 400. Es exactamente el fallo
+> fantasma que advierte la sección 2. **Matar todo `next` antes de verificar.**
+
+typecheck limpio, build de 516 rutas, **46/46** aserciones.
+
+### Lo que del brief NO se construyó, y por qué
+
+Cinco features piden datos que no existen en el modelo. Verificado contra el
+JSON, no supuesto:
+
+| Pedido | Qué hay realmente |
+|---|---|
+| Métrica en vivo por nodo (latencia, error rate) | **Cero** campos de telemetría en el modelo |
+| Sparklines de 24h | Granularidad más fina: **semana**, 138 puntos. Y son del corpus completo: **0 de 504** apps tiene serie propia |
+| Aristas animadas por tráfico activo | No hay tráfico. Las aristas son evidencia E2/E3 de una hoja |
+| Semáforo de salud por nodo | **324 de 504 (64%)** sin criticidad declarada, y criticidad es atributo de diseño, no estado |
+| Camino crítico en simulación de impacto | Blast radius es unión de conjuntos deduplicada, no simulación. R4 prohíbe sumarla |
+
+Construirlas haría que la interfaz aparente observabilidad en vivo sobre un corte
+estático con cobertura parcial declarada. Choca con R3 y R6.
+
+### Pendiente del brief, decidido y sin construir
+
+Modo oscuro **derivado de marca**: conserva las anclas PepsiCo y sube los estados
+a `#34D399`, `#E8A33D`, `#E86A6A`, más `pep-400` y `pep-300`. Los cinco pasan AA
+sobre `#0B0F17`, `#111827` y `#1F2937`. Medido, sin construir todavía.
+
+Por qué no se adoptó la paleta del brief tal cual: `#6366F1` reprueba AA en las
+tres superficies (4.29 / 3.97 / 3.29) y `#EF4444` reprueba en la flotante (3.90),
+pese a que el brief afirma AA. Y los estados de marca actuales **no sobreviven**
+un fondo oscuro: sobre `#111827` miden 3.37, 4.19 y 2.58.
+
+Faltan también: glassmorphism en la nav, bordes superiores de acento, minimapa y
+controles HUD del grafo.
+
+---
+
+## 7. Seguimientos pendientes (ofrecidos, sin cerrar)
 
 - Conseguir un extracto a grano de incidente para encender `IncidentRow` en la capa
   semántica *(parcialmente resuelto por el corpus QN)*
