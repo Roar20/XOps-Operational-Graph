@@ -288,7 +288,77 @@ tasa de población de Close-Notes.
 
 ---
 
-## 5. Seguimientos pendientes (ofrecidos, sin cerrar)
+## 5. Agente operativo sobre AI Gateway (colocado, no desplegable aún)
+
+Cinco archivos en el repo, más una ruta propia:
+
+```
+app/api/chat/route.ts       endpoint, Claude Sonnet 4.6 vía AI Gateway
+app/agent/page.tsx          ruta propia. NO está en Nav.tsx: dónde vive el
+                            agente es decisión de producto
+lib/agent/system-prompt.ts  las reglas R1–R10 que el agente no puede romper
+lib/agent/tools.ts          5 herramientas de servidor + 4 de cliente
+lib/agent/client-tools.ts   ejecutor contra IndexedDB
+components/AgentChat.tsx    la interfaz embebible
+```
+
+Dependencias: `ai@7`, `@ai-sdk/react@4`, `zod@4`. Variable única:
+`AI_GATEWAY_API_KEY`. No hace falta `@ai-sdk/anthropic` ni llave de Anthropic.
+
+### 🚫 No compila todavía
+
+```
+Module not found: Can't resolve '@/data/QN_v242_aggregates.json'
+```
+
+`lib/agent/tools.ts` lo importa. Es el mismo archivo del bloqueo de la sección 4:
+**sigue sin estar en el repo.** Verificado con un stub desechable: con el archivo
+presente, typecheck limpio, build de 516 rutas y **46/46** aserciones siguen
+pasando. El stub se borró; no hay dato inventado en `data/`.
+
+### Dos fallas corregidas al colocarlo, ambas verificadas en navegador
+
+**1. El lector de IndexedDB creaba la base y dejaba inservible la ingesta.**
+`open()` abría con `indexedDB.open("xops-corpus", 1)` y resolvía `null` en
+`onupgradeneeded` para reportar "no hay corpus". Pero la transacción de versión
+seguía su curso y dejaba `xops-corpus@1` vacía. Medido: después de esa llamada
+la base existe, y cuando la ingesta reabre en la versión 1 **`onupgradeneeded`
+ya no dispara**, así que no puede crear sus object stores y se queda con
+`objectStores = []`. Bastaba con preguntarle algo al agente antes de cargar el
+corpus para inutilizar la ingesta. Ahora abre sin fijar versión, aborta la
+transacción si resulta que la base no existía, y exige el store `meta`.
+Comprobado en tres escenarios: sin corpus deja **cero** bases; con corpus en v1
+lo lee; con corpus en v2 también lo lee, cosa que la versión anterior no hacía
+porque `open(DB, 1)` contra una v2 lanza `VersionError`.
+
+**2. `temperature: 0` rompía la lista de respaldo.** Sonnet 4.6 acepta
+`temperature`; **Sonnet 5 y Opus 5 la rechazan con 400** — el parámetro de
+muestreo desapareció en esa familia. Con `temperature: 0` los dos modelos de
+respaldo fallan, que es exactamente lo que la lista existe para evitar. Se quitó.
+Lo que fija la conducta es el system prompt, no el sampler.
+
+### Alineado al contrato del repo
+
+`AgentChat.tsx` venía en español dentro de un shell inglés. La regla de la
+sección 2 dice que **la interfaz está en inglés**; se tradujeron las once cadenas
+visibles. Los comentarios siguen en español, como el resto de `lib/`.
+
+### Abierto, decisión del usuario
+
+| Qué | Estado |
+|---|---|
+| `data/QN_v242_aggregates.json` | **bloquea el build**. Subirlo. |
+| Slug del modelo en Gateway | `anthropic/claude-sonnet-4.6` no se pudo verificar: el egress a `vercel.com` está bloqueado en el contenedor. Confirmar contra el catálogo de Gateway antes de desplegar. |
+| `providerOptions.anthropic.effort` | Sin llave no se puede comprobar que Gateway lo reenvíe. En la API cruda `effort` vive en `output_config`, no suelto. |
+| Proteger `/api/chat` | Hoy público. `MAX_MESSAGES` 40 es lo único que hay. Vercel Authentication primero, límite por IP después. |
+| `assignment_group_profile` sin tope | `user_by_group` y `alert_by_group` se devuelven completos; sólo `decalogue` está topado en 20. Una consulta corta como "SAP" puede devolver cientos de filas al modelo. `decalogue` da el precedente del tope. |
+| La cabecera del chat afirma "Claude Sonnet 4.6" | Si Gateway enruta al respaldo, la interfaz nombra un modelo que no respondió. Es una afirmación sin verificar, del tipo que este proyecto no publica. |
+| `/agent` fuera de `Nav.tsx` | Agregar `{ href: "/agent", label: "Agent" }` a `LINKS` si se quiere en la navegación. |
+| Ingesta a IndexedDB | No existe todavía. El contrato de stores está escrito arriba de `lib/agent/client-tools.ts`. |
+
+---
+
+## 6. Seguimientos pendientes (ofrecidos, sin cerrar)
 
 - Conseguir un extracto a grano de incidente para encender `IncidentRow` en la capa
   semántica *(parcialmente resuelto por el corpus QN)*
