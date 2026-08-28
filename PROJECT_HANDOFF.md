@@ -95,8 +95,26 @@ incident-grain extract in §28.
 
 ### Organisational cost of the POC
 
-Not documented in any artefact available to this session. **UNKNOWN.** Do not invent a
-figure; ask before publishing one.
+Two different things, kept apart.
+
+**DOCUMENTED EFFORT** — stated by the business case:
+
+| Item | Estimate |
+|---|---|
+| Application build | 2–3 person-weeks |
+| Relationship confirmation | ~30 sessions |
+| Each confirmation session | 30–60 minutes |
+| Governance / cadence | absorbed into existing BIOps sustain |
+
+The business case identifies **relationship confirmation as the real organisational cost**,
+because that effort is borne by application owners outside BIOps rather than by the team
+building the product.
+
+**FINANCIAL COST — NOT QUANTIFIED.** No certified cost, no opportunity cost, no saving. The
+effort estimate above is not a budget and must never be rendered as one.
+
+This distinction matters to the ask: the decision the business case requests is primarily
+**organisational participation**, not funding.
 
 ---
 
@@ -540,7 +558,22 @@ the distinction between declared, derived, corroborated, inferred and confirmed.
 | 7 | LLM-assisted synthesis over collected evidence | **PROPOSED** |
 
 **AI resolves difficult residual cases. It never replaces evidence obtainable
-deterministically.** Escalation stops at the first level that yields a unique answer.
+deterministically.**
+
+### Stopping rule
+
+Authoritative deterministic evidence may terminate discovery. Otherwise, continue
+collecting independent evidence until the evidence policy judges the candidate
+sufficiently corroborated, or the case remains unresolved.
+
+A unique candidate from a weak signal does not end the search. Independent convergence
+remains valuable *after* one signal has produced a single candidate — and divergence
+between signals is itself a finding (`conflict`, §9). Preserve the chain:
+
+> unique candidate ≠ correct relationship ≠ corroborated relationship ≠ declared relationship
+
+`unknown` remains a valid, acceptable outcome. False positives cost more than missing
+coverage.
 
 ---
 
@@ -563,7 +596,11 @@ mechanism, not as population rates.
 match to application name: **0%**. After stripping the `" - SO"` suffix: **6.4%**. The
 non-matching values are a different namespace — `VMWARE VCENTER PROD`, `PIC MACON DC PROD`,
 `SHAREDSERVICES-PCMILER` — i.e. infrastructure/CI-like, not applications. This is a
-**low-coverage, high-precision** signal: useless alone, decisive inside an ensemble.
+**low-coverage, high-uniqueness candidate signal**: it rarely fires, and when it fires it
+proposes exactly one candidate. **Uniqueness is not precision.** 32/32 unique candidates
+means 32/32 unambiguous, not 32/32 correct — correctness has never been checked against an
+independent label. Do not describe any signal as high-precision until Step 1.5 validates it
+against legitimate ground truth.
 
 **Signals confirmed absent:** Configuration Item, `opened_at`, resolution duration, ticket
 priority joined to time, monitor configuration, suppression state, assignment history.
@@ -572,26 +609,67 @@ priority joined to time, monitor configuration, suppression state, assignment hi
 
 ## 16. Relationship Discovery Evaluation
 
-**PROPOSED.** Nothing implemented. No method may enter the product before it is measured.
+**APPROVED as Step 1.5 — the next implementation step (§29).** Nothing implemented yet.
 
-Ground truth exists: 312 applications have declared support groups and 240 have declared
-platforms. Method:
+**Purpose: determine the simplest evidence architecture that reliably recovers or narrows
+relationships.** It is *not* "prove AI works."
 
-1. Hold out a stratified sample of confirmed relationships.
-2. Ask each method independently to recover them.
-3. Compare candidates against ground truth.
+### Ground truth is not uniform across relationship types
 
-Metrics: Top-1 accuracy · Top-3 recall · unresolved rate · false-positive rate · coverage ·
-calibration **only where the method produces a calibrated probability** (most will not —
-report an ordinal evidence score instead).
+| Relationship | Independent label available | Basis |
+|---|---|---|
+| Application → Support Group | **Yes** | 312 declared relationships |
+| Application → Platform | **Yes** | 240 declared relationships |
+| **Incident → Application** | **NOT DEMONSTRATED** | No independently labelled population has been identified |
 
-Evaluate rules, graph traversal, historical behaviour, entity resolution, semantic
-retrieval and LLM synthesis **separately, then in combination**. Promote a method only when
-measured performance justifies it.
+**Incident → Application is the first discovery target and the one with no established
+ground truth.** Do not assume one exists. Step 1.5 begins by inspecting whether a
+legitimate source can be found — it must be inspected, not asserted.
+
+**Target leakage is the specific hazard.** Assignment Group cannot both define the
+Incident → Application label and then be evaluated as an independent predictor of that same
+label. Any candidate ground-truth source must be independent of every signal being
+evaluated against it.
+
+### Which metrics are legitimate, and when
+
+**Without an independent Incident → Application label, report only:**
+candidate coverage · uniqueness · ambiguity · evidence convergence · evidence conflicts.
+
+**Do not report** accuracy · precision · recall · "relationship recovery" for
+Incident → Application until a valid independent label exists. Those words carry a claim
+this evaluation cannot yet support.
+
+**Where ground truth does exist** (the two application-level relationships above), the
+held-out method is valid: hold out a stratified sample, ask each method independently to
+recover it, compare against the label. Metrics there: Top-1 accuracy · Top-3 recall ·
+unresolved rate · false-positive rate · coverage · calibration **only where a method
+produces a calibrated probability** — most will not, so report an ordinal evidence score.
+
+### Approved sequence
+
+1. Determine whether legitimate Incident → Application ground truth exists.
+2. Measure each signal independently.
+3. Test normalization systematically.
+4. Classify entity namespaces where needed.
+5. Build candidate generators.
+6. Measure independent evidence convergence and conflict.
+7. Evaluate deterministic combinations.
+8. Measure the deterministic / graph ceiling.
+9. Only then test semantic retrieval.
+10. Only then test whether an LLM adds measurable value.
+
+### Constraints on this step
+
+- No discovery method enters the product UI.
+- No inferred relationship becomes declared.
+- No evidence score becomes a probability.
+- `unknown` remains a valid result.
+- False positives matter more than maximising raw coverage.
 
 **Prefer an evidence ensemble over one opaque model.** A candidate must be explainable as
-*"CI history + resolver-group frequency + Service Offering match"*. `"AI confidence: 92%"`
-is not acceptable output. Expose evidence, never hidden reasoning.
+*"resolver-group frequency + Service Offering match + process neighbourhood"*.
+`"AI confidence: 92%"` is not acceptable output. Expose evidence, never hidden reasoning.
 
 ---
 
@@ -818,16 +896,17 @@ every one is derived from the JSON. Currently **46/46 pass**.
 | Corpus upload → validate → scope → index | **IMPLEMENTED, VALIDATED** | 13/13 QN, browser E2E, persists across reload | — |
 | Per-dataset scope classification | **IMPLEMENTED, VALIDATED** | 7 sheets full, 2 sample, 2 unknown, 1 excluded | — |
 | Corpus analysis screen | **IMPLEMENTED** | renders from the uploaded workbook | Reorder per §17 |
-| Relationship model (Step 1) | **IMPLEMENTED, VALIDATED** | 13/13 RM invariants | UI in Step 2 |
+| Relationship model (Step 1) | **IMPLEMENTED, VALIDATED** | 13/13 RM invariants | Complete. Step 1.5 next |
 | Business-case reconciliation | **IMPLEMENTED, VALIDATED** | `npm run relationships` | Resolve §11 |
 | Evidence model types | **IMPLEMENTED** | `types/relationships.ts` | Wire into UI |
 | Incident attribution layer | **BLOCKED** | `available: false` | §28 |
 | Narrative architecture | **DECIDED** | §4 | Steps 2–5 |
 | Question-driven navigation | **DECIDED** | §6 | Step 5 |
-| Landing page as argument | **DECIDED** | §4, §5 | Step 2 |
-| Second-order exposure in UI | **DECIDED** | model exists | Step 3 |
-| Relationship discovery | **DECIDED** (design), **PROPOSED** (methods) | §14–16 | After Steps 2–4 |
-| Discovery evaluation harness | **PROPOSED** | §16 | Before promoting any method |
+| Landing page as argument | **DECIDED** | §4, §5 | Step 2, after Step 1.5 |
+| Second-order exposure in UI | **DECIDED** | model exists | Step 3, after Step 1.5 |
+| Relationship discovery | **DECIDED** (design), **PROPOSED** (methods) | §14–16 | **Step 1.5 — next implementation step** |
+| Discovery evaluation harness | **DECIDED** — approved as Step 1.5 | §16, §29 | **Build it now.** Gates every discovery method |
+| Incident → Application ground truth | **UNKNOWN** — not demonstrated | §16 | First task of Step 1.5. Inspect, do not assume |
 | Confirmation workflow | **DECIDED**, unimplemented | §19 | Needs a persistence answer |
 | Prioritization matrix | **PROPOSED** | §20 | After discovery |
 | `HYPOTHESIS` as a `ValueOrigin` | **PROPOSED** | §9 | Add with Step 2 |
@@ -924,40 +1003,63 @@ second-order UI, discovery methods, prioritization.
 
 **Where we stopped.** Step 1 — the relationship model — is complete, validated, committed
 in `53a86ff` and pushed. `npm run relationships` prints the diagnostic and passes 13/13.
-The user was shown the output and asked whether to review the model before Step 2, or to
-begin discovery via the AG → application path.
 
-**No answer was recorded. Start by asking which.**
+**The approved next step is Step 1.5 — Relationship Discovery Evaluation. This decision is
+made. Do not ask whether to begin discovery or UI work; do not start Step 2 first.**
 
-Step 1 delivered exactly its approved scope: type definitions, computed model, provenance,
-reconciliation checks, invariants, and a compact diagnostic output. **No UI.**
+**Why discovery moved ahead of the UI.** The signal inventory (§15) changed the priority.
+The signals turn out to be complementary rather than redundant:
 
-**The next step is Step 2: the landing page as the argument** — unless the user directs
-otherwise.
+| Signal | Character |
+|---|---|
+| Assignment Group | meaningful candidate coverage, substantial ambiguity |
+| Service Offering | low candidate coverage, high uniqueness when it matches |
+| Short Description | high candidate generation, very high ambiguity |
+| Graph relationships | structural evidence |
 
-- **Files expected to change:** `components/Overview.tsx`, `app/page.tsx`; possibly a new
-  component for the support-route partition figure. Read from `lib/relationships.ts`; do
-  not recompute.
-- **Intended output:** the seven-band hierarchy of §4/§5 — structural statement, the
-  102/210/192 partition as the anchor, why relationships are plural, one worked exposure
-  example, the declared Level 4 gap, the quality improvement, and four entry points.
-- **Tests required:** `npm run typecheck`, `npm run build`, `npm run verify` (46/46 must
-  still pass — `/` is exercised by C5 and C6, which iterate all eight routes, and by B1–B3,
-  which read the overview directly), `npm run relationships` (13/13).
-- **Do NOT implement yet:** relationship discovery methods, the confirmation workflow, the
-  prioritization matrix, navigation regrouping, or any inference. Do not add charts that do
-  not close a named narrative gap.
+Designing screens around relationship states before knowing what discovery can legitimately
+establish would bake in a model of the world we have not measured. Measure the ceiling
+first, then build the narrative around what is provable.
 
----
+### Step 1.5 scope
+
+Purpose, verbatim from §16: **determine the simplest evidence architecture that reliably
+recovers or narrows relationships.** Not "prove AI works."
+
+- **Files expected to change:** new `lib/discovery/` (candidate generators, evidence
+  policy); new `scripts/discovery-eval.ts` plus an npm script. Read from
+  `lib/relationships.ts` and `lib/qn/`; do not recompute what they already provide.
+- **Intended output:** a reproducible evaluation report covering, per signal and per
+  combination — candidate coverage, uniqueness, ambiguity, evidence convergence and
+  evidence conflicts. Accuracy-family metrics **only** for the two relationship types that
+  have an independent label (§16).
+- **Begin with:** step 1 of the §16 sequence — determine whether legitimate
+  Incident → Application ground truth exists. Inspect; do not assume. Watch for target
+  leakage: Assignment Group cannot both define the label and be scored against it.
+- **Tests required:** `npm run typecheck`, `npm run build`, `npm run verify` (46/46),
+  `npm run relationships` (13/13). The new evaluation script must be reproducible and exit
+  non-zero on its own invariant failures.
+- **Do NOT implement yet:** any UI for discovery, semantic retrieval, LLM methods, the
+  confirmation workflow, the prioritization matrix, or navigation regrouping. Semantic and
+  LLM tiers are gated behind steps 1–8 of the §16 sequence.
 
 ## 30. Recommended Next 5 Steps
+
+### Step 1.5 — Relationship Discovery Evaluation  ·  **NEXT**
+
+- **Objective:** find the simplest evidence architecture that reliably recovers or narrows relationships, and measure the deterministic ceiling before any model is trusted.
+- **Why now:** the signals are complementary (§29). Until we know what discovery can legitimately establish, UI built around relationship states would encode an unmeasured assumption.
+- **Files:** new `lib/discovery/`, new `scripts/discovery-eval.ts`; reads `lib/relationships.ts`, `lib/qn/`.
+- **Expected output:** per signal and per deterministic combination — candidate coverage, uniqueness, ambiguity, convergence, conflicts. Accuracy-family metrics only where §16 says a legitimate label exists.
+- **Validation:** the §16 sequence executed in order, starting with the ground-truth determination. Reproducible via npm script.
+- **Stop when:** the deterministic / graph ceiling is measured and published, and the Incident → Application ground-truth question is answered either way. **No discovery method reaches the UI. Semantic and LLM tiers stay untouched until steps 1–8 are complete.**
 
 ### Step 2 — Landing page as the argument
 
 - **Objective:** the landing page states the structural problem and its size before any KPI.
-- **Why now:** the model exists and is invisible. This is the largest narrative gain per line changed.
+- **Why now:** after 1.5, because what the page can claim about relationship states depends on what discovery proved.
 - **Files:** `components/Overview.tsx`, `app/page.tsx`, `lib/relationships.ts` (read only).
-- **Expected output:** seven bands per §4; the partition as anchor; the Level 4 gap stated on the page.
+- **Expected output:** seven bands per §4; the 102/210/192 partition as anchor; the Level 4 gap stated on the page.
 - **Validation:** typecheck · build · 46/46 acceptance · 13/13 relationship invariants · render and read it.
 - **Stop when:** a reader reaches "what should I investigate next" without scrolling past the fold twice. Do not touch navigation.
 
@@ -988,15 +1090,6 @@ otherwise.
 - **Validation:** 46/46 · every route still reachable · palette actions still resolve.
 - **Stop when:** navigation names questions, not tables. Do not delete any route.
 
-### Step 6 — Relationship discovery, deterministic tier only
-
-- **Objective:** implement escalation levels 1–3 and the evaluation harness. **No AI yet.**
-- **Why now:** measure the deterministic ceiling before any model is allowed near it.
-- **Files:** new `lib/discovery/` — candidate generation from AG → application and the Service-Offering suffix rule; new `scripts/discovery-eval.ts`.
-- **Expected output:** candidates carrying `RelationshipStatus` and `EvidenceItem[]`; a held-out evaluation reporting Top-1, Top-3, unresolved and false-positive rates per method.
-- **Validation:** ground truth = the 312 declared support relationships and 240 declared platforms; results reproducible via an npm script.
-- **Stop when:** the deterministic ceiling is measured and published. **Do not promote any method into the UI, and do not add semantic or LLM methods, until this number exists.**
-
 ---
 
 ## 31. Do Not Re-Litigate
@@ -1019,6 +1112,11 @@ contradict, **surface the conflict — do not silently override either side.**
 13. Inferred never becomes declared without human confirmation.
 14. The POC is static: no database, no auth, no server-side corpus.
 15. Interface in English; code comments in Spanish.
+16. **Step 1.5 (Relationship Discovery Evaluation) runs before any Step 2 UI work.** The
+    signal inventory established that the signals are complementary; measuring what
+    discovery can legitimately establish precedes designing screens around it.
+17. Uniqueness is not precision. A signal that proposes one candidate has not been shown
+    to propose the correct one.
 
 ---
 
@@ -1033,8 +1131,9 @@ contradict, **surface the conflict — do not silently override either side.**
 5. **Should `HYPOTHESIS` become a first-class `ValueOrigin`?** Currently prose only.
 6. **Should the semantic layer's embedded QN projection eventually be retired** if a
    workbook ever ships a temporal sheet?
-7. **What is the POC's organisational cost?** §3 requires it; no artefact available to this
-   session documents it.
+7. **What is the POC's financial cost?** §3 now records the documented *effort* estimate
+   from the business case. No financial figure, opportunity cost or saving is documented
+   anywhere, and none should be produced without a source.
 8. **Which branch is authoritative?** The older `HANDOFF.md` names
    `claude/xops-operational-graph-poc-2ycnay`; all work since has gone to
    `claude/handoff-qn-data-setup-pi5neu`.
@@ -1115,9 +1214,15 @@ association to causality, or a shared support relationship to ambiguous incident
 The invariants in §23 exist to catch this; do not weaken them to make a screen render.
 
 Do not restart product discovery. The narrative architecture in §4 and the thesis in §2 are
-approved. §31 lists what not to re-litigate. Continue from §29 — and note that the user was
-asked whether to review the model or begin discovery, and did not answer; ask before
-choosing.
+approved. §31 lists what not to re-litigate.
+
+**Continue from §29: Step 1.5, Relationship Discovery Evaluation. That decision is already
+made — do not ask whether to begin discovery or UI work, and do not start Step 2 first.**
+Begin with the first task of the §16 sequence: determine whether legitimate
+Incident → Application ground truth exists. Do not assume it does, and watch for target
+leakage — Assignment Group cannot both define that label and be scored against it. Where no
+independent label exists, report candidate coverage, uniqueness, ambiguity, convergence and
+conflicts, and do not report accuracy, precision or recall.
 
 Before any major architectural change, explain why the existing decision no longer holds and
 get agreement. Preserving a disagreement with the business case is correct behaviour, not a
