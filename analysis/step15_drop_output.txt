@@ -1,0 +1,78 @@
+==========================================================================
+1. DOES THE DROP CARRY A LABEL?
+==========================================================================
+  catalog_applications.json          grain: one row per application
+  catalog_platforms.json             grain: one row per platform
+  catalog_assignment_groups.json     grain: one row per support group
+  edges_app_platform.json            grain: one row per application-platform pair
+  edges_app_ag.json                  grain: one row per application-support group pair
+  incidents_quality.json             grain: aggregates over the incident corpus
+
+  Fields across all seven files matching a label field: NONE
+  incidents_quality join_note: La calidad se mide por Assignment Group, no por Business Application. 77 de 237 AGs del puente tienen calidad medida, lo que alcanza 64.6% de los inci
+
+  VERDICT: no incident number, no Business Application, no Configuration
+  Item. Same corpus, same grain, different packaging. GROUND TRUTH remains
+  NOT AVAILABLE.
+
+==========================================================================
+2. WHAT THE FULLER EDGE SET CHANGES
+==========================================================================
+  drop app->AG pairs : 672
+  repo app->AG pairs : 629
+  in drop, not in repo: 43
+  in repo, not in drop: 0   <- strict superset if 0
+
+  --- REPO (published model)
+    AG keys reaching >=1 application : 249
+    partition ANY-singleton          : (102, 210, 192)
+    partition EVERY-singleton        : (37, 275, 192)
+    partition intersection           : (119, 193, 192)
+    |cand| median 1  p90 5  max 42
+    incidents 233,834 | zero-candidate 81,571 (34.9%) | unique 68,740 (29.4%)
+
+  --- DROP (full edge set)
+    AG keys reaching >=1 application : 265
+    partition ANY-singleton          : (102, 210, 192)
+    partition EVERY-singleton        : (33, 279, 192)
+    partition intersection           : (119, 193, 192)
+    |cand| median 1  p90 4  max 42
+    incidents 233,834 | zero-candidate 81,338 (34.8%) | unique 68,973 (29.5%)
+
+  The extra pairs touch 43 applications; 0 of them have NO AG in the published model.
+  So restoring them cannot reduce the 192 unrouted applications. Adding
+  edges can only ADD candidates, so strict uniqueness moves the wrong way.
+
+==========================================================================
+3. WHERE THE TWO PACKAGINGS DISAGREE
+==========================================================================
+  app->platform pair sets identical: True  (468 vs 468)
+  applications carrying BOTH E2 and E3 platform edges: 0
+  applications whose platform tier DISAGREES between packagings: 13
+     BO SCORE - NIS ARCHIVE UNIVERSE                  drop=E2  repo=E3
+     EIAP RANCHER                                     drop=E2  repo=E3
+     EIP AZURE KUBERNETES SERVICE                     drop=E2  repo=E3
+     ENTERPRISE REPORTING TOOL                        drop=E2  repo=E3
+     FINANCIAL REPORTING ERT                          drop=E2  repo=E3
+     GLOBAL BRAIN                                     drop=E2  repo=E3
+     HELM                                             drop=E2  repo=E3
+     KUBECOST                                         drop=E2  repo=E3
+     MEASUREUP REPORTING                              drop=E2  repo=E3
+     PERFORMANCE REPORTING ERT                        drop=E2  repo=E3
+     POSITIVE VALUE CHAIN REPORTING AMESA             drop=E2  repo=E3
+     PRODUCT PORTFOLIO & SUSTAINABILITY INSIGHTS      drop=E2  repo=E3
+     REVENUE MANAGEMENT PREDICTIVE AMESA APAC         drop=E2  repo=E3
+
+  repo tier counts: E2=91 E3=149
+  drop tier counts: E2=104 E3=136
+
+  AG edge evidence tiers in the drop: {'E3': 672}
+  -> no bridge/inventory discriminator, so evidence convergence for
+     Application -> Assignment Group remains NOT MEASURABLE.
+
+  recurring_patterns : drop 150 | repo 200
+  by_assignment_group: drop 140 rows / 233,834 incidents | repo 140 rows / 233,834 incidents
+  join_coverage      : drop 77 of 237 / 64.6% | repo 79 of 265 / 65.2%
+
+  Neither packaging dominates: the drop has more AG edges, the repo has
+  more recurring patterns. They coexist. Neither replaces the other.

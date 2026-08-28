@@ -416,3 +416,110 @@ build's existing invariant style so they can be dropped into `scripts/build_data
 
 D10 is what rejects N5. D4 is what rejects the Service Offering proxy label. D8 is what rejects
 reading §B2's 29.4% as an accuracy.
+
+---
+
+# Addendum · The seven-file source drop (2026-08-28)
+
+A zip arrived carrying the seven-file normalized packaging of the semantic layer plus its SPEC
+and the original build-prompt sequence. Preserved at `analysis/source_drop/`, **not wired into
+the build** — it is evidence, not a replacement. Reproduce with
+`python3 analysis/step15_drop_compare.py` → `analysis/step15_drop_output.txt`.
+
+## AD-1. The verdict does not change
+
+`meta.files` declares each grain, and `incidents_quality.json` declares its own:
+**"aggregates over the incident corpus."** Its `join_note` repeats the finding this report opened
+with — *"La calidad se mide por Assignment Group, no por Business Application."*
+
+Field scan across all seven files for a label field (`Business Application`, `Configuration Item`,
+`Number`, `cmdb_ci`): **NONE**. The SPEC never mentions them either.
+
+**GROUND TRUTH remains NOT AVAILABLE.** Same corpus, same grain, different packaging.
+
+## AD-2. §F1 confirmed empirically, and sized as immaterial
+
+`edges_app_ag.json` carries **672** application→AG pairs. The published model carries **629**.
+The 43 missing pairs are a **strict subset**: zero pairs run the other way. That is
+`build_data.py:152-158` — bridge preferred, inventory discarded — caught directly rather than
+inferred from the code.
+
+Restoring them rescues nothing:
+
+| | published (629 pairs) | full edge set (672 pairs) |
+|---|---:|---:|
+| partition · ANY-singleton (the headline) | 102 / 210 / 192 | **102 / 210 / 192** |
+| partition · EVERY-singleton (strict) | 37 | **33** |
+| partition · intersection | 119 | 119 |
+| AG keys reaching ≥1 application | 249 | **265** |
+| p90 candidate set | 5 | 4 |
+| incidents with zero candidates | 34.9% | 34.8% |
+| incidents with a unique candidate | 29.4% | 29.5% |
+
+The 43 pairs touch 43 applications and **all 43 already have an assignment group**, so the 192
+unrouted are untouched. Adding edges can only add candidates, so the strict-uniqueness reading
+moves the *wrong* way: 37 → 33.
+
+Two consequences worth separating:
+
+- **The loss is real and should be fixed** — it is silent, and it is the difference between the
+  249 AG keys the model can actually route through and the 265 canonical keys it claims. Sixteen
+  keys reach an application only through the discarded edges.
+- **It is not a recovery lever.** Every headline number is unchanged or slightly worse. Anyone
+  hoping the missing edges explain the routing gap should read this table instead.
+
+## AD-3. Two packagings disagree on the authority of 13 applications
+
+The application→platform pair set is **identical** (468 = 468). The evidence tier is not.
+
+The drop carries the tier **per edge**; the projector derives it **per application** from bridge
+presence (`build_data.py:171`). Result:
+
+| | E2 (Tech Buckets, derived analysis) | E3 (keyword match over free text) |
+|---|---:|---:|
+| published model | 91 | 149 |
+| source drop | **104** | **136** |
+
+Thirteen applications are **E2 in one packaging and E3 in the other**: `BO SCORE - NIS ARCHIVE
+UNIVERSE`, `EIAP RANCHER`, `EIP AZURE KUBERNETES SERVICE`, `ENTERPRISE REPORTING TOOL`,
+`FINANCIAL REPORTING ERT`, `GLOBAL BRAIN`, `HELM`, `KUBECOST`, `MEASUREUP REPORTING`,
+`PERFORMANCE REPORTING ERT`, `POSITIVE VALUE CHAIN REPORTING AMESA`, `PRODUCT PORTFOLIO &
+SUSTAINABILITY INSIGHTS`, `REVENUE MANAGEMENT PREDICTIVE AMESA APAC`.
+
+E3 is documented as admitting false positives and false negatives; E2 is not. So the same
+relationship is presented with different authority depending on which file the reader opens.
+No application carries both tiers in the drop, so this is a genuine disagreement between two
+projections of one source, not a mixed-evidence application. **Reconciliation belongs with
+whoever produced the Tech Buckets analysis** — it should not be resolved by picking the packaging
+that flatters the coverage number.
+
+## AD-4. Convergence is still not measurable
+
+All 672 AG edges are tagged `E3` with **no bridge/inventory discriminator**. The drop restores the
+lost *pairs* but not their *provenance*, so §F1's recommendation stands exactly as written: the
+projector must emit both source lists plus an agreement flag. Nothing in this drop lets the
+project measure whether its two AG sources agree.
+
+## AD-5. Neither packaging dominates
+
+| | drop | published model |
+|---|---:|---:|
+| app→AG edges | **672** | 629 |
+| recurring patterns | 150 | **200** |
+| `by_assignment_group` | 140 rows / 233,834 incidents | identical |
+| `join_coverage` | 77 of 237 · 64.6% | 79 of 265 · 65.2% |
+
+The drop is richer on edges and older on quality. Its `join_coverage` figures are the ones
+`HANDOFF.md` §3 already lists as "spec vs dato real" discrepancies — this drop is where those
+spec numbers come from, which resolves that open question: they were not wrong, they were an
+earlier cut.
+
+`HANDOFF.md` decision 1 applies unchanged: **the two corpora coexist; the loaded one is not
+replaced.** Nothing in `data/` was modified.
+
+## AD-6. What was deliberately not done
+
+`analysis/source_drop/PROMPTS_Claude_Code.md` is the original build-prompt sequence (Prompts 0–7)
+for the application that already exists in this repository. Re-running it would rebuild the app
+from this packaging and regress approved Step 1 work. It is preserved as provenance and was not
+executed.
