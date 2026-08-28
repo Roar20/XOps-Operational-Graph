@@ -1,0 +1,81 @@
+==========================================================================
+1. WHAT THIS FILE IS, AND IS NOT
+==========================================================================
+  sheets: ['PvT_Summary', 'AGs', 'VENN', 'AGs_Mail', 'Mapping_BA_AG_BIOps', 'Mail Base AS-AG BIOps (2)', 'Mail Base AS-AG BIOps']
+  Mapping_BA_AG_BIOps columns: ['BusinessApplication', 'Assignment Group', 'Manager Ag', 'Mail Manager Ag', 'BI Ops', 'Mail_Sent?', 'App Owner/POC from our Learning', 'App Owner/POC if in doubt', 'Comments']
+
+  No incident number. No per-incident Business Application. No
+  Configuration Item. Grain is one row per application-group pair.
+  GROUND TRUTH for Incident -> Application remains NOT AVAILABLE.
+
+  rows 264 | distinct applications 163 | matching the 504 portfolio 157 (96.3%)
+
+==========================================================================
+2. EVIDENCE CONVERGENCE - Application -> Assignment Group
+==========================================================================
+  First convergence measurement available to this project. Agreement is
+  defined as a NON-EMPTY INTERSECTION between the external group set and
+  the model's. That is a weak test where an application carries several
+  groups, and it is reported as such - it is not an accuracy.
+
+  published model  (629 edges)
+    CONVERGENCE  142  (90.4%)
+    CONFLICT      14  (8.9%)
+    model silent   1  (model declares no group, external names one)
+
+  full edge set    (672 edges)
+    CONVERGENCE  146  (93.0%)
+    CONFLICT      10  (6.4%)
+    model silent   1  (model declares no group, external names one)
+
+  The 43 edges the projector discards account for 4 of the 14 conflicts.
+  This is the first measurement that gives the build_data.py:152-158
+  finding an operational cost: restoring the discarded edges lowers the
+  conflict rate against an independent source.
+
+  Remaining conflicts, split by whether the two names are near-identical
+  (an entity-resolution artefact) or genuinely different groups:
+    [GENUINE     ] ALTERYX                                model=['MOSAICALTERYXEUROPEPROD']
+                                                          ext  =['ADVANCEDANALYTICSPLATFORMSUPPORT', 'HUMANRESOURCESAPPLICATIONSLATAMBRAZIL']
+    [GENUINE     ] FORM.IO PLATFORM                       model=['DATADIGITALSOLUTIONSAMESA']
+                                                          ext  =['PAPERLESSFORMSSUPPORT']
+    [GENUINE     ] IAI CONVERSATION AI STUDIO             model=['CHATBOTSUPPORT', 'DATABASEUNIDENTIFIEDCLOUD']
+                                                          ext  =['IACOE']
+    [GENUINE     ] LABEL RIGHT                            model=['LABELRIGHTGLOBALSUSTAIN']
+                                                          ext  =['IACOE']
+    [GENUINE     ] MANUFACTURING CONTROL TOWER - EUROPE   model=['PEPSENSEINTERNETOFTHINGSPLATFORMOPERATIONS']
+                                                          ext  =['DIGITALVALUECHAINVIRTUALCONTROLROOMSUPPORTLATAM', 'DPSPEPLINESUPPORT']
+    [GENUINE     ] RETAIL STORE INFORMATION REPORTING C   model=['DATADIGITALSOLUTIONSAPAC']
+                                                          ext  =['LZHOPERATIONCHINA', 'RETAILSTOREINFORMATIONREPORTINGOPERATIONCHINA']
+    [NAME VARIANT] SDW BOBJ REPORTING                     model=['BUSINESSOBJECTSAPPS']
+                                                          ext  =['BUSINESSOBJECTSAPPSPFNA']
+    [GENUINE     ] SPENDWISE REPORTING                    model=['REALESTATEFACILITIESSUPPORTCGF']
+                                                          ext  =['GBSDIGITALFACTORYSUPPORT', 'STBIANDREPORTINGSUSTAINSUPPORT']
+    [NAME VARIANT] SPHERA CORPORATE SUSTAINABILITY SOFT   model=['DIGITALSUSTAINABILITYAGRO', 'GLOBALSUSTAINABILITYCGF']
+                                                          ext  =['DPADIGITALSUSTAINABILITYAGRO']
+    [GENUINE     ] myRIS                                  model=['STBIANDREPORTINGSUSTAINSUPPORT']
+                                                          ext  =['GBSDIGITALFACTORYSUPPORT']
+
+  Genuine disagreements: 8 of 157 matched applications (5.1%).
+  Convergence is NOT correctness. Two sources can agree and both be wrong,
+  and this measures a DECLARED relationship, not an incident attribution.
+
+==========================================================================
+3. ENTITY SPACE - declared classification vs the report's heuristic
+==========================================================================
+  280 assignment groups, declared Category:
+    BI                  198
+    AI/ML                55
+    Platform/Infra       27
+  per-row Confidence:
+    CONFIRMED           164
+    INFERRED             81
+    PENDING              35
+
+  AG keys: external 280 | model 265 | overlap 188 | external-only 92 | model-only 77
+
+  This REPLACES the lexicon heuristic in section D of the report for the
+  188 overlapping groups - but only for the CONFIRMED rows. The
+  catalogue marks 81 of its own rows INFERRED and 35 PENDING; those carry
+  no more authority than the heuristic they would replace and must not be
+  promoted. The model's own AG namespace is only 71% covered by this catalogue.

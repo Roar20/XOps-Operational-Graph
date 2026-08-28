@@ -523,3 +523,96 @@ replaced.** Nothing in `data/` was modified.
 for the application that already exists in this repository. Re-running it would rebuild the app
 from this packaging and regress approved Step 1 work. It is preserved as provenance and was not
 executed.
+
+---
+
+# Addendum 2 · The external Assignment Groups catalogue (Drive, Apr 2026)
+
+`Assignment_Groups_Catalog_v2026_230426.xlsx`, found in the shared Drive folder and preserved at
+`analysis/source_drop/`. Reproduce with `python3 analysis/step15_external_ag_catalog.py` →
+`analysis/step15_external_output.txt` (needs `openpyxl`).
+
+Seven sheets. Two matter.
+
+## AD2-1. The verdict, again, does not change
+
+No incident number. No per-incident Business Application. No Configuration Item. The grain is one
+row per application–group pair. **GROUND TRUTH for `Incident → Application` remains NOT
+AVAILABLE**, now checked against a third source.
+
+The rest of the Drive folder was scanned and is not incident-grain either:
+`turkey_closed_loop_cadena.csv` is one row per ADF pipeline with product-membership flags;
+`pepiris_inventario_soporte_PROD.csv` is pipeline support instrumentation (`tiene_retry`,
+`tiene_snow`). Both describe pipelines, not tickets.
+
+## AD2-2. The first evidence-convergence measurement this project has been able to make
+
+Sheet `Mapping_BA_AG_BIOps` carries **BusinessApplication → Assignment Group** for 163
+applications, from a BIOps outreach campaign — provenance independent of *both* sources the
+projector uses. §F said no two independent sources spoke about the same relationship anywhere in
+the corpus. That is no longer true.
+
+157 of 163 (96.3%) match the 504-application portfolio on exact normalized name.
+
+| | published model (629 edges) | full edge set (672 edges) |
+|---|---:|---:|
+| **CONVERGENCE** | 142 · **90.4%** | 146 · **93.0%** |
+| **CONFLICT** | 14 · 8.9% | 10 · **6.4%** |
+| model silent, external names a group | 1 | 1 |
+
+**This is what AD-2 was missing.** There the 43 discarded edges looked immaterial — every headline
+number moved by a tenth of a point. Measured against an independent source they are not
+immaterial at all: **they account for 4 of the 14 conflicts.** Restoring them cuts the
+disagreement rate from 8.9% to 6.4%. `build_data.py:152-158` now has a measured operational cost,
+not just a correctness argument.
+
+Splitting the 10 remaining conflicts by whether the two names are near-identical:
+
+- **2 are entity-resolution artefacts** — `SDW BOBJ REPORTING` (`BUSINESS OBJECTS APPS` vs
+  `BUSINESS OBJECTS APPS PFNA`), `SPHERA CORPORATE SUSTAINABILITY` (`DIGITAL SUSTAINABILITY AGRO`
+  vs `DPA DIGITAL SUSTAINABILITY AGRO`). Prefix/suffix variants of one group.
+- **8 are genuine disagreements** — `ALTERYX`, `FORM.IO PLATFORM`, `IAI CONVERSATION AI STUDIO`,
+  `LABEL RIGHT`, `MANUFACTURING CONTROL TOWER - EUROPE`, `myRIS`, `RETAIL STORE INFORMATION
+  REPORTING CHINA`, `SPENDWISE REPORTING`. Different groups, not different spellings.
+
+**Genuine conflict rate: 8 of 157, 5.1%.** These 8 are the highest-value confirmation candidates
+in the project — a named application where two independent sources disagree about who supports it
+is exactly what a 30–60 minute confirmation session is for.
+
+**Three limits on that number, none optional:**
+
+1. Agreement is defined as a **non-empty intersection**. Where an application carries several
+   groups this is a weak test that favours agreement. It is a convergence measurement, not an
+   accuracy.
+2. **Convergence is not correctness.** Two sources can agree and both be wrong. Invariant D6.
+3. This corroborates a **declared** relationship at application grain. It says nothing about
+   whether any individual incident belongs to any application.
+
+## AD2-3. Section D's heuristic can be partly retired
+
+Sheet `AGs` carries a **declared** classification of 280 assignment groups — `BI` 198, `AI/ML` 55,
+`Platform/Infra` 27 — with a per-row confidence and a PepWise hierarchy (`Parent`,
+`Manager Group`, Domain/Program/Capability/Technology/Platform).
+
+This is the declared taxonomy §D had to approximate with a lexicon. **But it does not simply
+replace it:**
+
+- The catalogue marks **81 of its own 280 rows `INFERRED`** and 35 `PENDING`; only 164 are
+  `CONFIRMED`. An inferred row carries no more authority than the heuristic it would replace, and
+  promoting one would violate invariant D2.
+- Coverage of the model's own namespace is partial: 188 of the model's 265 AG keys overlap
+  (**71%**). 77 model keys are absent from the catalogue, and 92 catalogue keys are absent from
+  the model.
+
+So §D's finding stands where it matters — the AG namespace is a support-organisation namespace,
+not an application namespace — and can now be stated with declared evidence for 188 groups,
+`CONFIRMED` ones only, with the remaining 77 still on the heuristic and labelled as such.
+
+## AD2-4. Revised recommendation
+
+AD-2 rated the projector fix as correctness-only. **Raise it.** It is now the single change with a
+measured effect on agreement with an outside source, and it is still one build change that alters
+no declared relationship.
+
+Add one: the 8 genuine conflicts are a ready-made confirmation queue. They need no inference
+engine, no scoring, and no UI — just a list and a person.
