@@ -1,5 +1,6 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useParams, usePathname } from "next/navigation";
 import { sectors } from "@/lib/data";
 import {
@@ -40,6 +41,10 @@ export function AskXOps() {
   }, [context]);
 
   const [open, setOpen] = useState(false);
+  // Portal target only exists after mount on the client. Rendering the drawer
+  // before mount would trigger a hydration mismatch; this flag defers it.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const [scope, setScope] = useState<PortfolioRiskScope>(defaultScope);
   const [phase, setPhase] = useState<Phase>("idle");
   const [pack, setPack] = useState<EvidencePack | null>(null);
@@ -84,7 +89,7 @@ export function AskXOps() {
       >
         Ask XOps ✦
       </button>
-      {open && (
+      {open && mounted && createPortal(
         <div
           className="fixed inset-0 z-50 flex bg-ink-900/30"
           onClick={() => setOpen(false)}
@@ -163,7 +168,8 @@ export function AskXOps() {
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   );
