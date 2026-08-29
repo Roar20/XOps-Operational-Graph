@@ -1,3 +1,15 @@
+/**
+ * Evidence domain boundaries — do not cross accidentally.
+ *
+ * Portfolio Risk uses the server-side Semantic Layer (GraphData, 504 apps).
+ * RCA-oriented capabilities (RCA Intelligence, work-note quality) draw from
+ * the QN operational corpus loaded in the browser (IndexedDB, ~720k rows).
+ * Blast Radius may eventually combine both, deliberately.
+ *
+ * Adding a new question type must declare which domain it reads from.
+ * This file must not import from lib/qn/*; those imports belong in the
+ * per-capability pack builders that need the QN corpus, when they exist.
+ */
 import type {
   Application,
   BusinessImpact,

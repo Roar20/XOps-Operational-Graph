@@ -15,6 +15,30 @@ import type {
 
 type Phase = "idle" | "calling" | "answered" | "error";
 
+/**
+ * Never render backend detail to the user. Every failure path funnels through
+ * this table so the interface stays intentional and safe. Technical detail is
+ * kept in console.warn calls at the failure site for developer diagnosis.
+ */
+function translateHttpError(
+  status: number,
+  vercelErr: string | null,
+): string {
+  if (status === 504 || vercelErr === "FUNCTION_INVOCATION_TIMEOUT") {
+    return "The analysis took longer than expected. Please try again.";
+  }
+  if (status === 429) {
+    return "The analysis service is temporarily busy. Please try again shortly.";
+  }
+  if (status === 401 || status === 403) {
+    return "The analysis service is not available. Please contact the administrator.";
+  }
+  if (status >= 500) {
+    return "The analysis could not be completed. Please try again.";
+  }
+  return "The analysis could not be completed. Please try again.";
+}
+
 /** Sorted once for the drawer's scope selector. */
 const SECTORS_SORTED = [...sectors].sort((a, b) =>
   a.name.localeCompare(b.name),
@@ -63,18 +87,49 @@ export function AskXOps() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ evidence_pack: built }),
       });
-      const json = await res.json();
+
+      const contentType = res.headers.get("content-type") ?? "";
+      const isJson = contentType.includes("application/json");
+      const vercelErr = res.headers.get("x-vercel-error");
+
+      // Read the body once, safely, so it is available for both the internal
+      // log and the success path — but never rendered as-is to the user.
+      let body: unknown = null;
+      try {
+        body = isJson ? await res.json() : await res.text();
+      } catch {
+        /* body was already consumed or unreadable */
+      }
+
       if (!res.ok) {
-        setError(
-          `${json?.error ?? "request_failed"} — ${JSON.stringify(json).slice(0, 400)}`,
-        );
+        // Server details go to devtools only. UI gets a mapped, benign message.
+        console.warn("[AskXOps] request failed", {
+          status: res.status,
+          vercelErr,
+          contentType,
+          body,
+        });
+        setError(translateHttpError(res.status, vercelErr));
         setPhase("error");
         return;
       }
-      setAnswer(json.answer);
+
+      if (!isJson || body === null || typeof body !== "object") {
+        console.warn("[AskXOps] unexpected response shape", {
+          status: res.status,
+          contentType,
+          body,
+        });
+        setError("Unexpected server response. Please try again.");
+        setPhase("error");
+        return;
+      }
+
+      setAnswer((body as { answer: StructuredAnswer }).answer);
       setPhase("answered");
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
+      console.warn("[AskXOps] network error", e);
+      setError("The analysis could not be completed. Please try again.");
       setPhase("error");
     }
   };

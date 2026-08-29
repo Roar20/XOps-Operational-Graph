@@ -59,9 +59,17 @@ export async function handleInsightRequest(
 }
 
 async function defaultCallModel(pack: EvidencePack): Promise<StructuredAnswer> {
+  // Execution-config only. The grounding contract lives in the prompt and the
+  // schema; nothing here weakens it. Adaptive thinking, effort and retries are
+  // switched off for this endpoint because the timeout occurs during the
+  // model-call stage — all three can increase latency and none are required
+  // for a single-turn Portfolio Risk synthesis over a bounded Evidence Pack.
+  // The Anthropic model, its fallback chain, the schema and the system prompt
+  // are unchanged.
   const result = await generateObject({
     // Same AI Gateway as /api/chat: no new env, no extra key.
     model: "anthropic/claude-sonnet-4.6",
+    maxRetries: 0,
     system: XOPS_INSIGHT_SYSTEM_PROMPT,
     schema: structuredAnswerSchema,
     messages: [
@@ -73,7 +81,7 @@ async function defaultCallModel(pack: EvidencePack): Promise<StructuredAnswer> {
       },
     ],
     providerOptions: {
-      anthropic: { thinking: { type: "adaptive" }, effort: "medium" },
+      anthropic: { thinking: { type: "disabled" } },
       gateway: {
         models: ["anthropic/claude-sonnet-5", "anthropic/claude-opus-5"],
       },

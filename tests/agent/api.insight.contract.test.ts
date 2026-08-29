@@ -113,4 +113,62 @@ describe("handleInsightRequest — contract", () => {
     assert.equal(body.error, "model_call_failed");
     assert.match(body.message, /timeout/);
   });
+
+  it("every error response advertises application/json (frontend assumption)", async () => {
+    const pack = buildPortfolioRiskPack({ kind: "ai_ml_segment" });
+    const firstId = pack.applications[0]?.app_id;
+    assert.ok(firstId);
+
+    const cases: Array<[string, Promise<Response>]> = [
+      ["invalid_evidence_pack", handleInsightRequest({}, async () => ({} as StructuredAnswer))],
+      [
+        "model_call_failed",
+        handleInsightRequest({ evidence_pack: pack }, async () => {
+          throw new Error("boom");
+        }),
+      ],
+      [
+        "invalid_llm_output",
+        handleInsightRequest({ evidence_pack: pack }, async () =>
+          ({
+            answer: "x",
+            findings: [
+              { app_id: firstId, fact: "x", evidence: [firstId], signals_combined: ["only_one"] },
+            ],
+            insight: "x",
+            recommended_action: "x",
+            confidence: "low",
+            limitations: [],
+          }) as unknown as StructuredAnswer),
+      ],
+      [
+        "hallucinated_ids",
+        handleInsightRequest({ evidence_pack: pack }, async () => ({
+          answer: "x",
+          findings: [
+            {
+              app_id: "APP-INVENTED",
+              fact: "x",
+              evidence: [firstId],
+              signals_combined: ["a", "b"],
+            },
+          ],
+          insight: "x",
+          recommended_action: "x",
+          confidence: "low",
+          limitations: [],
+        })),
+      ],
+    ];
+
+    for (const [label, resPromise] of cases) {
+      const res = await resPromise;
+      const contentType = res.headers.get("content-type") ?? "";
+      assert.match(
+        contentType,
+        /application\/json/,
+        `${label} should advertise application/json, got "${contentType}"`,
+      );
+    }
+  });
 });
