@@ -63,15 +63,28 @@ export function AskXOps() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ evidence_pack: built }),
       });
-      const json = await res.json();
+      const contentType = res.headers.get("content-type") ?? "";
+      const payload = contentType.includes("application/json")
+        ? await res.json().catch(() => null)
+        : await res.text();
       if (!res.ok) {
-        setError(
-          `${json?.error ?? "request_failed"} — ${JSON.stringify(json).slice(0, 400)}`,
-        );
+        const errorPayload =
+          typeof payload === "object" && payload
+            ? (payload as { error?: string; message?: string })
+            : null;
+        const details = errorPayload
+          ? `${errorPayload.error ?? "request_failed"}${errorPayload.message ? ` — ${errorPayload.message}` : ""}`
+          : `Request failed with status ${res.status}${typeof payload === "string" && payload ? ` — ${payload.slice(0, 300)}` : ""}`;
+        setError(details);
         setPhase("error");
         return;
       }
-      setAnswer(json.answer);
+      if (!payload || typeof payload !== "object" || !("answer" in payload)) {
+        setError("Invalid response from the insight service.");
+        setPhase("error");
+        return;
+      }
+      setAnswer(payload.answer as StructuredAnswer);
       setPhase("answered");
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
