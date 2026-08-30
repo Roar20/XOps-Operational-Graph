@@ -8,6 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/agent/**/*.test.ts",
+    "demo:portfolio-risk": "tsx scripts/demo-portfolio-risk.ts",
     "verify": "node scripts/verify-acceptance.mjs",
     "data": "python3 scripts/build_data.py",
     "qn": "python3 scripts/build_qn_aggregates.py",
@@ -31,6 +33,7 @@
     "esbuild": "^0.28.2",
     "postcss": "^8.5.26",
     "tailwindcss": "^3.4.19",
+    "tsx": "^4.19.2",
     "typescript": "^5.9.3"
   }
 }

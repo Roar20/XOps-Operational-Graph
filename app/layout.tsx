@@ -6,6 +6,7 @@ import { Nav } from "@/components/Nav";
 import { CommandPalette } from "@/components/CommandPalette";
 import { CorpusProvider } from "@/lib/qn/corpus";
 import { RulesPanel } from "@/components/RulesPanel";
+import { AskXOps } from "@/components/AskXOps";
 
 export const metadata: Metadata = {
   title: "XOps Operational Graph · POC v1",
@@ -31,6 +32,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <div className="ml-auto flex flex-1 items-center justify-end gap-3">
               <CommandPalette />
               <RulesPanel />
+              <AskXOps />
             </div>
           </div>
 
