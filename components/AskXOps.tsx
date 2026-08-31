@@ -3,12 +3,17 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
-import { sectors } from "@/lib/data";
-import { useCorpus } from "@/lib/qn/corpus";
+import { quality, sectors } from "@/lib/data";
+import { useCorpus, useDataset } from "@/lib/qn/corpus";
 import {
   buildPortfolioRiskPack,
   deriveXOpsContext,
 } from "@/lib/agent/insights/portfolio-risk";
+import {
+  buildOperationalHealthAnalysis,
+  type OperationalAnalysis,
+  type OperationalSignalRow,
+} from "@/lib/agent/operational-health";
 import type {
   EvidencePack,
   PortfolioRiskScope,
@@ -610,11 +615,47 @@ function OperationalHealthFlow() {
     );
   }
 
-  // Corpus is loaded. The deterministic operational aggregates (userByGroup,
-  // alertByGroup, dualAxis, byDecalogue) are usable from the /quality tab;
-  // the grounded AI synthesis for this capability is intentionally not wired
-  // up here. Copy reflects both facts honestly.
-  const pop = snapshot.population;
+  // Corpus is loaded. Run the deterministic aggregate analysis directly in
+  // the browser and render an Operational Brief. No LLM. The /quality tab
+  // stays available as evidence drill-down.
+  return <OperationalBrief snapshot={snapshot} />;
+}
+
+function OperationalBrief({
+  snapshot,
+}: {
+  snapshot: NonNullable<ReturnType<typeof useCorpus>["snapshot"]>;
+}) {
+  const ubg = useDataset("userByGroup");
+  const abg = useDataset("alertByGroup");
+
+  const analysis = useMemo<OperationalAnalysis>(() => {
+    return buildOperationalHealthAnalysis({
+      userRows: (ubg.rows ?? []) as any,
+      alertRows: (abg.rows ?? []) as any,
+      corpus: {
+        incidents: snapshot.population.user,
+        alerts: snapshot.population.alert,
+        total: snapshot.population.total,
+      },
+      attribution: quality?.meta?.join_coverage
+        ? {
+            ags_matched: quality.meta.join_coverage.ags_matched ?? null,
+            ags_bridge: quality.meta.join_coverage.ags_bridge ?? null,
+            ags_quality: quality.meta.join_coverage.ags_quality ?? null,
+            incident_coverage_pct:
+              quality.meta.join_coverage.incident_coverage_pct ?? null,
+          }
+        : null,
+    });
+  }, [ubg.rows, abg.rows, snapshot.population]);
+
+  const anyFindings =
+    analysis.findings.cross_signal.length +
+      analysis.findings.incident_heavy.length +
+      analysis.findings.alert_heavy.length >
+    0;
+
   return (
     <div className="space-y-4 p-4">
       <div>
@@ -622,49 +663,190 @@ function OperationalHealthFlow() {
           Operational Health · BETA
         </div>
         <div className="mt-1 text-lg font-semibold text-pep-900">
-          Operational signals available
+          Operational Brief
+        </div>
+        <div className="text-xs text-ink-600">
+          Scope · Loaded operational corpus
         </div>
       </div>
 
       <div className="grid grid-cols-3 gap-2">
-        <MiniStat label="Incidents" value={fmtNum(pop.user)} />
-        <MiniStat label="Alerts" value={fmtNum(pop.alert)} />
-        <MiniStat label="Records" value={fmtNum(pop.total)} />
+        <MiniStat label="Incidents" value={fmtNum(analysis.corpus.incidents)} />
+        <MiniStat label="Alerts" value={fmtNum(analysis.corpus.alerts)} />
+        <MiniStat label="Records" value={fmtNum(analysis.corpus.total)} />
       </div>
 
       <FactRow label="Evidence" value="QN Operational Corpus" />
-      <FactRow
-        label="Workbook"
-        value={snapshot.fileName ?? "unknown"}
-      />
-      <FactRow
-        label="Verified"
-        value={snapshot.workbookVerified ? "yes" : "no"}
-      />
-      <FactRow
-        label="As of"
-        value={snapshot.asOf ?? "not declared"}
-      />
+      <FactRow label="Workbook" value={snapshot.fileName ?? "unknown"} />
+      <FactRow label="Verified" value={snapshot.workbookVerified ? "yes" : "no"} />
+      <FactRow label="As of" value={snapshot.asOf ?? "not declared"} />
 
-      <p className="text-sm leading-relaxed text-ink-800">
-        Operational Health uses deterministic corpus aggregates to identify
-        where operational activity is concentrated. Grounded AI synthesis is
-        not enabled for this capability yet.
-      </p>
+      {!anyFindings && (
+        <div className="rounded border border-ink-200 bg-ink-50/50 p-3 text-sm text-ink-800">
+          The loaded corpus does not expose enough Assignment Group aggregates
+          to classify operational concentration. Load a workbook that includes
+          User_By_Group and Alert_By_Group.
+        </div>
+      )}
+
+      {analysis.findings.cross_signal.length > 0 && (
+        <Section title="Cross-signal concentration">
+          <ol className="space-y-2">
+            {analysis.findings.cross_signal.map((r) => (
+              <OperationalFinding
+                key={r.ag_key}
+                row={r}
+                whyItMatters="Operational activity is concentrated across both incident and alert populations."
+              />
+            ))}
+          </ol>
+        </Section>
+      )}
+
+      {analysis.findings.incident_heavy.length > 0 && (
+        <Section title="Incident-heavy">
+          <ol className="space-y-2">
+            {analysis.findings.incident_heavy.map((r) => (
+              <OperationalFinding
+                key={r.ag_key}
+                row={r}
+                whyItMatters="Operational activity is concentrated primarily in the incident population."
+              />
+            ))}
+          </ol>
+        </Section>
+      )}
+
+      {analysis.findings.alert_heavy.length > 0 && (
+        <Section title="Alert-heavy">
+          <ol className="space-y-2">
+            {analysis.findings.alert_heavy.map((r) => (
+              <OperationalFinding
+                key={r.ag_key}
+                row={r}
+                whyItMatters="Operational activity is concentrated primarily in the alert population."
+              />
+            ))}
+          </ol>
+        </Section>
+      )}
+
+      {analysis.quality && (
+        <Section title="Evidence quality observation">
+          <p className="text-sm leading-relaxed text-ink-900">
+            {analysis.quality.text}
+          </p>
+        </Section>
+      )}
+
+      <Section title="Application attribution">
+        <div className="rounded border border-ink-200 p-2.5 text-sm">
+          <div className="font-semibold text-pep-900">
+            {analysis.attribution.kind === "verified"
+              ? "Verified"
+              : analysis.attribution.kind === "partial"
+                ? "Partial"
+                : "Incomplete / not established"}
+            {analysis.attribution.coverage_pct != null && (
+              <span className="ml-2 text-xs font-normal text-ink-500">
+                {analysis.attribution.coverage_pct.toFixed(1)}% of ticket
+                volume via Assignment Group bridge
+              </span>
+            )}
+          </div>
+          <p className="mt-1 text-xs leading-relaxed text-ink-700">
+            {analysis.attribution.note}
+          </p>
+        </div>
+      </Section>
+
+      <Section title="What should happen next">
+        <p className="text-sm leading-relaxed text-ink-900">
+          Review Assignment Groups showing concentration across both
+          operational signals, then validate application attribution before
+          extending the analysis to business impact.
+        </p>
+      </Section>
+
+      <Section title="Limitations">
+        <ul className="list-disc pl-4 text-xs leading-relaxed text-ink-600">
+          {analysis.limitations.map((l, i) => (
+            <li key={i}>{l}</li>
+          ))}
+        </ul>
+      </Section>
 
       <Link
         href="/quality"
         className="inline-block rounded bg-pep-900 px-3 py-2 text-sm font-semibold text-white hover:bg-pep-800"
       >
-        Explore operational signals →
+        Explore operational evidence →
       </Link>
 
       <div className="border-t border-ink-200 pt-2 text-[11px] text-ink-500">
         Raw operational records are never sent to the model. Only bounded
         aggregate evidence. Evidence source: QN Operational Corpus · loaded in
-        this browser · not combined with the semantic layer.
+        this browser · not combined with the semantic layer. Method:{" "}
+        {analysis.method.ranking}; top band ={" "}
+        {analysis.method.top_band} per axis.
       </div>
     </div>
+  );
+}
+
+function OperationalFinding({
+  row,
+  whyItMatters,
+}: {
+  row: OperationalSignalRow;
+  whyItMatters: string;
+}) {
+  return (
+    <li className="rounded border border-ink-200 p-2.5 text-sm">
+      <div className="font-semibold text-pep-900">{row.ag_name}</div>
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <div>
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-500">
+            Incidents
+          </div>
+          <div className="text-sm font-semibold text-pep-900">
+            {row.has_incidents
+              ? row.incidents.toLocaleString("en-US")
+              : "not present"}
+          </div>
+          {row.rank_incidents != null && (
+            <div className="text-[10px] text-ink-500">
+              rank #{row.rank_incidents}
+              {row.share_incidents != null &&
+                ` · ${(row.share_incidents * 100).toFixed(1)}% of population`}
+            </div>
+          )}
+        </div>
+        <div>
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-500">
+            Alerts
+          </div>
+          <div className="text-sm font-semibold text-pep-900">
+            {row.has_alerts
+              ? row.alerts.toLocaleString("en-US")
+              : "not present"}
+          </div>
+          {row.rank_alerts != null && (
+            <div className="text-[10px] text-ink-500">
+              rank #{row.rank_alerts}
+              {row.share_alerts != null &&
+                ` · ${(row.share_alerts * 100).toFixed(1)}% of population`}
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="mt-2">
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-500">
+          Why it matters
+        </div>
+        <p className="mt-0.5 text-ink-900">{whyItMatters}</p>
+      </div>
+    </li>
   );
 }
 
