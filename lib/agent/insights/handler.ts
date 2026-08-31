@@ -1,6 +1,7 @@
 import {
   generateObject,
   NoObjectGeneratedError,
+  TypeValidationError,
   type LanguageModelUsage,
 } from "ai";
 import {
@@ -63,7 +64,37 @@ function noObjectDiagnostics(e: unknown): string {
   const causeCls =
     rawCause instanceof Error ? rawCause.constructor.name : "unknown";
   const respModel = e.response?.modelId ?? "unknown";
-  return ` finish_reason=${finish} output_tokens=${out} total_tokens=${total} text_len=${textLen} cause=${causeCls} response_model=${respModel}`;
+  return ` finish_reason=${finish} output_tokens=${out} total_tokens=${total} text_len=${textLen} cause=${causeCls} response_model=${respModel}${schemaIssueDiagnostics(rawCause)}`;
+}
+
+/**
+ * If the NoObjectGeneratedError cause is a TypeValidationError wrapping a
+ * Zod-shaped error, report structural fields only. Path elements come from
+ * our own schema keys (findings, signals_combined, app_id, ...) or from
+ * numeric array indices; both are safe to log.
+ *
+ * NEVER logs: issue.message, issue.received, issue.expected, TypeValidationError.value,
+ * any inner values or model output. Only issue count, first path, first code.
+ */
+function schemaIssueDiagnostics(cause: unknown): string {
+  if (!TypeValidationError.isInstance(cause)) return "";
+  const inner = (cause as { cause?: unknown }).cause;
+  const issues =
+    inner &&
+    typeof inner === "object" &&
+    Array.isArray((inner as { issues?: unknown }).issues)
+      ? ((inner as { issues: Array<{ path?: unknown; code?: unknown }> }).issues)
+      : [];
+  const count = issues.length;
+  if (count === 0) {
+    return ` schema_issue_count=unknown first_issue_path=unknown first_issue_code=unknown`;
+  }
+  const first = issues[0];
+  const path = Array.isArray(first?.path)
+    ? first.path.map((p) => String(p)).join(".") || "(root)"
+    : "unknown";
+  const code = typeof first?.code === "string" ? first.code : "unknown";
+  return ` schema_issue_count=${count} first_issue_path=${path} first_issue_code=${code}`;
 }
 
 /**
