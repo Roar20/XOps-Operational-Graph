@@ -22,12 +22,20 @@ describe("Ask XOps capability catalog", () => {
     assert.equal(available[0].id, "portfolio_risk");
   });
 
-  it("exposes exactly two BETA capabilities: Operational Health and Blast Radius", () => {
+  it("exposes exactly three BETA capabilities: Operational Health, Blast Radius, RCA Intelligence", () => {
     const beta = CAPABILITIES.filter((c) => c.status === "beta");
     assert.deepEqual(
       beta.map((c) => c.id).sort(),
-      ["blast_radius", "operational_health"],
+      ["blast_radius", "operational_health", "rca_intelligence"],
     );
+  });
+
+  it("RCA Intelligence declares QN Operational Corpus evidence and does not claim causation in its question", () => {
+    const c = CAPABILITIES.find((x) => x.id === "rca_intelligence");
+    assert.ok(c);
+    assert.match(c!.evidence, /QN Operational Corpus/);
+    assert.doesNotMatch(c!.question, /caused|root cause identified|because of/i);
+    assert.doesNotMatch(c!.description, /root cause identified|caused by/i);
   });
 
   it("Portfolio Risk declares Semantic Layer evidence and never QN", () => {
@@ -43,12 +51,10 @@ describe("Ask XOps capability catalog", () => {
     assert.match(c!.evidence, /QN Operational Corpus/);
   });
 
-  it("evidence_gaps and rca_intelligence are COMING_NEXT", () => {
-    for (const id of ["evidence_gaps", "rca_intelligence"] as const) {
-      const c = CAPABILITIES.find((x) => x.id === id);
-      assert.ok(c, `${id} missing`);
-      assert.equal(c!.status, "coming_next");
-    }
+  it("evidence_gaps is COMING_NEXT", () => {
+    const c = CAPABILITIES.find((x) => x.id === "evidence_gaps");
+    assert.ok(c, "evidence_gaps missing");
+    assert.equal(c!.status, "coming_next");
   });
 
   it("every capability has a non-empty question, description and evidence label", () => {

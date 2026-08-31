@@ -23,6 +23,10 @@ import {
   type OperationalConnection,
   type RelatedApplication,
 } from "@/lib/agent/blast-radius-brief";
+import {
+  buildRcaInvestigationBrief,
+  type RcaBrief,
+} from "@/lib/agent/rca-intelligence";
 import type {
   EvidencePack,
   PortfolioRiskScope,
@@ -150,6 +154,7 @@ function Drawer({ onClose }: { onClose: () => void }) {
           )}
           {view === "operational_health" && <OperationalHealthFlow />}
           {view === "blast_radius" && <BlastRadiusFlow context={context} />}
+          {view === "rca_intelligence" && <RcaIntelligenceFlow />}
         </div>
       </div>
     </div>
@@ -1153,6 +1158,300 @@ function RelatedApplicationCard({ item }: { item: RelatedApplication }) {
         </span>
       </div>
     </li>
+  );
+}
+
+/* --------------------------- RCA Intelligence flow ------------------------ */
+
+function RcaIntelligenceFlow() {
+  const { ready, snapshot } = useCorpus();
+
+  if (!ready) {
+    return (
+      <div className="space-y-3 p-4">
+        <div className="text-xs font-semibold uppercase tracking-wide text-ink-500">
+          RCA Intelligence · BETA
+        </div>
+        <p className="text-sm text-ink-700">Checking browser corpus…</p>
+      </div>
+    );
+  }
+
+  if (!snapshot) {
+    return (
+      <div className="space-y-4 p-4">
+        <div className="text-xs font-semibold uppercase tracking-wide text-ink-500">
+          RCA Intelligence · BETA
+        </div>
+        <div className="rounded border border-warn/40 bg-warn/10 p-3 text-sm text-ink-900">
+          Operational corpus required.
+          <div className="mt-1 text-xs text-ink-700">
+            RCA Intelligence surfaces evidence for investigation. It reads the
+            classified incident aggregates and close-note quality signals from
+            a QN workbook loaded in this browser. Nothing is uploaded to a
+            server.
+          </div>
+        </div>
+        <Link
+          href="/upload"
+          className="inline-block rounded bg-pep-900 px-3 py-2 text-sm font-semibold text-white hover:bg-pep-800"
+        >
+          Load data →
+        </Link>
+      </div>
+    );
+  }
+
+  return <InvestigationBrief snapshot={snapshot} />;
+}
+
+function InvestigationBrief({
+  snapshot,
+}: {
+  snapshot: NonNullable<ReturnType<typeof useCorpus>["snapshot"]>;
+}) {
+  const ubg = useDataset("userByGroup");
+  const abg = useDataset("alertByGroup");
+  const bd = useDataset("byDecalogue");
+  const da = useDataset("dualAxis");
+  const cn = useDataset("complianceCloseNotes");
+  const ca = useDataset("complianceAlerts");
+
+  // Reuse the Operational Health analysis for the deterministic operational
+  // context. Same source of truth; no separate ranking.
+  const operational = useMemo(() => {
+    return buildOperationalHealthAnalysis({
+      userRows: (ubg.rows ?? []) as any,
+      alertRows: (abg.rows ?? []) as any,
+      corpus: {
+        incidents: snapshot.population.user,
+        alerts: snapshot.population.alert,
+        total: snapshot.population.total,
+      },
+      attribution: quality?.meta?.join_coverage
+        ? {
+            ags_matched: quality.meta.join_coverage.ags_matched ?? null,
+            ags_bridge: quality.meta.join_coverage.ags_bridge ?? null,
+            ags_quality: quality.meta.join_coverage.ags_quality ?? null,
+            incident_coverage_pct:
+              quality.meta.join_coverage.incident_coverage_pct ?? null,
+          }
+        : null,
+    });
+  }, [ubg.rows, abg.rows, snapshot.population]);
+
+  const brief: RcaBrief = useMemo(() => {
+    return buildRcaInvestigationBrief({
+      corpus: {
+        incidents: snapshot.population.user,
+        alerts: snapshot.population.alert,
+        total: snapshot.population.total,
+      },
+      decalogue: {
+        present: !!bd.present,
+        rows: (bd.rows ?? []) as any,
+        summary: (bd.facts?.summary as Record<string, number | string>) ?? null,
+      },
+      dualAxis: {
+        present: !!da.present,
+        total:
+          ((da.facts?.total as Record<string, number | string>) ?? null),
+      },
+      compliance: {
+        close_notes_present: !!cn.present,
+        alerts_present: !!ca.present,
+      },
+      operational,
+    });
+  }, [
+    snapshot.population,
+    bd.present,
+    bd.rows,
+    bd.facts,
+    da.present,
+    da.facts,
+    cn.present,
+    ca.present,
+    operational,
+  ]);
+
+  const anythingToShow =
+    brief.signals.length > 0 ||
+    brief.evidence_quality !== null ||
+    brief.alert_evidence !== null ||
+    brief.operational_context.length > 0;
+
+  return (
+    <div className="space-y-4 p-4">
+      <div>
+        <div className="text-[11px] uppercase tracking-wide text-ink-500">
+          RCA Intelligence · BETA
+        </div>
+        <div className="mt-1 text-lg font-semibold text-pep-900">
+          Investigation Brief
+        </div>
+        <div className="text-xs text-ink-600">
+          Scope · Loaded operational corpus
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2">
+        <MiniStat label="Incidents" value={fmtNum(brief.corpus.incidents)} />
+        <MiniStat label="Alerts" value={fmtNum(brief.corpus.alerts)} />
+        <MiniStat label="Records" value={fmtNum(brief.corpus.total)} />
+      </div>
+
+      {!anythingToShow && (
+        <div className="rounded border border-ink-200 bg-ink-50/50 p-3 text-sm text-ink-800">
+          The loaded corpus does not expose enough aggregate evidence to
+          suggest an investigation starting point. Load a workbook that
+          includes By_Decalogue and Dual_Axis.
+        </div>
+      )}
+
+      {brief.signals.length > 0 && (
+        <Section title="Investigation signals">
+          <ol className="space-y-2">
+            {brief.signals.map((s) => (
+              <li
+                key={s.code}
+                className="rounded border border-ink-200 p-2.5 text-sm"
+              >
+                <div className="flex items-baseline justify-between gap-2">
+                  <div className="font-semibold text-pep-900">
+                    {s.code} · {s.pattern}
+                  </div>
+                  <div className="text-xs text-ink-500">
+                    {s.incidents.toLocaleString("en-US")} incidents
+                    {s.share_of_classified != null &&
+                      ` · ${(s.share_of_classified * 100).toFixed(1)}% of classified`}
+                  </div>
+                </div>
+                <div className="mt-1.5">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-500">
+                    Why review this
+                  </div>
+                  <p className="mt-0.5 text-ink-900">{s.why_review}</p>
+                </div>
+                <div className="mt-1.5 text-[10px] text-ink-500">
+                  Evidence source · QN Operational Corpus · By_Decalogue
+                </div>
+              </li>
+            ))}
+          </ol>
+        </Section>
+      )}
+
+      {brief.evidence_quality && (
+        <Section title="Evidence quality">
+          <div className="rounded border border-ink-200 p-2.5 text-sm">
+            <p className="text-ink-900">{brief.evidence_quality.text}</p>
+            <div className="mt-1.5">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-500">
+                Why it matters
+              </div>
+              <p className="mt-0.5 text-ink-900">
+                {brief.evidence_quality.why_it_matters}
+              </p>
+            </div>
+            <div className="mt-1.5 text-[10px] text-ink-500">
+              Evidence source · QN Operational Corpus · Dual_Axis
+            </div>
+          </div>
+        </Section>
+      )}
+
+      {brief.alert_evidence && (
+        <Section title="Alert evidence">
+          <div className="rounded border border-ink-200 p-2.5 text-sm">
+            <p className="text-ink-900">{brief.alert_evidence.text}</p>
+            <div className="mt-1.5">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-500">
+                Why review this
+              </div>
+              <p className="mt-0.5 text-ink-900">
+                {brief.alert_evidence.why_review}
+              </p>
+            </div>
+            <div className="mt-1.5 text-[10px] text-ink-500">
+              Evidence source · QN Operational Corpus · Compliance_Alerts
+            </div>
+          </div>
+        </Section>
+      )}
+
+      {brief.operational_context.length > 0 && (
+        <Section title="Operational context">
+          <p className="mb-2 text-[11px] text-ink-500">
+            Reused from the Operational Health analysis (same source of truth).
+          </p>
+          <ol className="space-y-2">
+            {brief.operational_context.map((c) => (
+              <li
+                key={c.ag_name}
+                className="rounded border border-ink-200 p-2.5 text-sm"
+              >
+                <div className="font-semibold text-pep-900">{c.ag_name}</div>
+                <div className="mt-1 grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-500">
+                      Incident rank
+                    </div>
+                    <div className="text-ink-900">
+                      {c.rank_incidents != null ? `#${c.rank_incidents}` : "not present"}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-500">
+                      Alert rank
+                    </div>
+                    <div className="text-ink-900">
+                      {c.rank_alerts != null ? `#${c.rank_alerts}` : "not present"}
+                    </div>
+                  </div>
+                </div>
+                <p className="mt-1.5 text-ink-900">{c.why_review}</p>
+              </li>
+            ))}
+          </ol>
+        </Section>
+      )}
+
+      <Section title="What should I investigate next?">
+        <ol className="list-decimal pl-5 text-sm leading-relaxed text-ink-900">
+          {brief.next_steps.map((s, i) => (
+            <li key={i} className="mt-1">
+              {s}
+            </li>
+          ))}
+        </ol>
+      </Section>
+
+      <Section title="Limitations">
+        <p className="text-xs text-ink-700">
+          RCA Intelligence surfaces evidence for investigation. It does not
+          establish root cause.
+        </p>
+        <ul className="mt-1 list-disc pl-4 text-xs leading-relaxed text-ink-600">
+          {brief.limitations.map((l, i) => (
+            <li key={i}>{l}</li>
+          ))}
+        </ul>
+      </Section>
+
+      <Link
+        href="/quality"
+        className="inline-block rounded bg-pep-900 px-3 py-2 text-sm font-semibold text-white hover:bg-pep-800"
+      >
+        Explore RCA evidence →
+      </Link>
+
+      <div className="border-t border-ink-200 pt-2 text-[11px] text-ink-500">
+        Raw operational records are never sent to the model. Only aggregate
+        evidence. Evidence source: QN Operational Corpus · loaded in this
+        browser · not combined with the semantic layer.
+      </div>
+    </div>
   );
 }
 

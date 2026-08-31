@@ -5,11 +5,12 @@
  *
  * Contract enforced by the tests in this module:
  *  - Portfolio Risk is the fully "available" capability.
- *  - Operational Health and Blast Radius are "beta" capabilities.
+ *  - Operational Health, Blast Radius and RCA Intelligence are "beta".
  *  - Portfolio Risk declares Semantic Layer evidence and never QN.
  *  - Operational Health declares QN Operational Corpus evidence.
  *  - Blast Radius declares Semantic Layer evidence (relationship graph).
- *  - Evidence Gaps and RCA Intelligence are visible but "coming_next".
+ *  - RCA Intelligence declares QN Operational Corpus evidence.
+ *  - Evidence Gaps remains "coming_next".
  */
 
 export type CapabilityId =
@@ -70,10 +71,11 @@ export const CAPABILITIES: CapabilityMeta[] = [
   {
     id: "rca_intelligence",
     label: "RCA Intelligence",
-    question: "What appears to be driving an operational issue?",
+    question:
+      "What evidence should I investigate first to understand what happened?",
     description:
-      "Synthesize likely operational drivers from work notes and incident patterns.",
+      "Surface the strongest existing diagnostic patterns and evidence-quality signals to give an investigator a defensible starting point. Does not establish root cause.",
     evidence: "QN Operational Corpus",
-    status: "coming_next",
+    status: "beta",
   },
 ];
