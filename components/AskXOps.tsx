@@ -1,25 +1,70 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
-import { sectors } from "@/lib/data";
+import { quality, sectors } from "@/lib/data";
+import { useCorpus, useDataset } from "@/lib/qn/corpus";
 import {
   buildPortfolioRiskPack,
   deriveXOpsContext,
 } from "@/lib/agent/insights/portfolio-risk";
+import {
+  buildOperationalHealthAnalysis,
+  type OperationalAnalysis,
+  type OperationalSignalRow,
+} from "@/lib/agent/operational-health";
+import {
+  browseApplicationsHref,
+  buildBlastRadiusBrief,
+  listApplications,
+  type BlastRadiusBrief,
+  type Field,
+  type OperationalConnection,
+  type RelatedApplication,
+} from "@/lib/agent/blast-radius-brief";
+import {
+  buildRcaInvestigationBrief,
+  type RcaBrief,
+} from "@/lib/agent/rca-intelligence";
 import type {
   EvidencePack,
   PortfolioRiskScope,
   StructuredAnswer,
+  XOpsContext,
 } from "@/lib/agent/insights/types";
+import {
+  CAPABILITIES,
+  type CapabilityId,
+  type CapabilityMeta,
+} from "@/lib/agent/capabilities";
 
+/* --------------------------------------------------------------------------
+ * Ask XOps — capability home + capability flows.
+ *
+ * The drawer is portalled to document.body so `position: fixed` resolves
+ * against the viewport (the layout header uses backdrop-blur, which turns
+ * itself into a containing block for fixed descendants).
+ *
+ * Each capability has its own view. Only Portfolio Risk executes an LLM
+ * request. Operational Health surfaces corpus state and links to Load Data;
+ * its backend is deliberately deferred to the next iteration.
+ * ------------------------------------------------------------------------ */
+
+type View = "home" | CapabilityId;
 type Phase = "idle" | "calling" | "answered" | "error";
 
-/**
- * Never render backend detail to the user. Every failure path funnels through
- * this table so the interface stays intentional and safe. Technical detail is
- * kept in console.warn calls at the failure site for developer diagnosis.
- */
+/* --------------------------------- helpers --------------------------------- */
+
+const SECTORS_SORTED = [...sectors].sort((a, b) =>
+  a.name.localeCompare(b.name),
+);
+
+function scopeLabel(scope: PortfolioRiskScope): string {
+  if (scope.kind === "ai_ml_segment") return "AI/ML segment";
+  return sectors.find((s) => s.sector_id === scope.sector_id)?.name ?? scope.sector_id;
+}
+
 function translateHttpError(
   status: number,
   vercelErr: string | null,
@@ -39,17 +84,30 @@ function translateHttpError(
   return "The analysis could not be completed. Please try again.";
 }
 
-/** Sorted once for the drawer's scope selector. */
-const SECTORS_SORTED = [...sectors].sort((a, b) =>
-  a.name.localeCompare(b.name),
-);
+/* --------------------------------- shell ---------------------------------- */
 
-/**
- * Trigger + Drawer + AnswerCard for the XOps Insight Agent. Global capability
- * mounted once in the layout header. Reads navigation state via next router;
- * does not own or mutate it.
- */
 export function AskXOps() {
+  const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  return (
+    <>
+      <button
+        type="button"
+        className="rounded bg-pep-900 px-2.5 py-1.5 text-sm font-medium text-white hover:bg-pep-800"
+        onClick={() => setOpen(true)}
+        aria-label="Ask XOps"
+      >
+        Ask XOps ✦
+      </button>
+      {open && mounted &&
+        createPortal(<Drawer onClose={() => setOpen(false)} />, document.body)}
+    </>
+  );
+}
+
+function Drawer({ onClose }: { onClose: () => void }) {
   const pathname = usePathname() ?? "";
   const params = useParams() as Record<string, string | string[] | undefined>;
   const context = useMemo(
@@ -64,16 +122,235 @@ export function AskXOps() {
     return { kind: "ai_ml_segment" };
   }, [context]);
 
-  const [open, setOpen] = useState(false);
-  // Portal target only exists after mount on the client. Rendering the drawer
-  // before mount would trigger a hydration mismatch; this flag defers it.
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const [view, setView] = useState<View>("home");
   const [scope, setScope] = useState<PortfolioRiskScope>(defaultScope);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex bg-ink-900/30"
+      role="dialog"
+      aria-label="Ask XOps"
+      onClick={onClose}
+    >
+      <div
+        className="ml-auto flex h-full w-full max-w-[560px] flex-col bg-white shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <DrawerHeader
+          view={view}
+          onBack={view !== "home" ? () => setView("home") : undefined}
+          onClose={onClose}
+        />
+        <div className="flex-1 overflow-y-auto">
+          {view === "home" && (
+            <CapabilityHome
+              scope={scope}
+              setScope={setScope}
+              onSelect={setView}
+            />
+          )}
+          {view === "portfolio_risk" && (
+            <PortfolioRiskFlow scope={scope} setScope={setScope} />
+          )}
+          {view === "operational_health" && <OperationalHealthFlow />}
+          {view === "blast_radius" && <BlastRadiusFlow context={context} />}
+          {view === "rca_intelligence" && <RcaIntelligenceFlow />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DrawerHeader({
+  view,
+  onBack,
+  onClose,
+}: {
+  view: View;
+  onBack?: () => void;
+  onClose: () => void;
+}) {
+  const title =
+    view === "home"
+      ? "Ask XOps"
+      : CAPABILITIES.find((c) => c.id === view)?.label ?? "Ask XOps";
+  const subtitle =
+    view === "home" ? "Operational intelligence grounded in evidence" : null;
+  return (
+    <div className="flex items-start justify-between gap-3 border-b border-ink-200 px-4 py-3">
+      <div className="min-w-0">
+        {onBack && (
+          <button
+            type="button"
+            className="mb-1 text-xs text-ink-500 hover:text-pep-900"
+            onClick={onBack}
+          >
+            ← Back
+          </button>
+        )}
+        <div className="text-xs font-semibold uppercase tracking-wide text-ink-500">
+          {view === "home" ? "ASK XOPS ✦" : "CAPABILITY"}
+        </div>
+        <div className="mt-0.5 text-lg font-semibold text-pep-900">
+          {title}
+        </div>
+        {subtitle && (
+          <div className="text-xs text-ink-600">{subtitle}</div>
+        )}
+      </div>
+      <button
+        type="button"
+        className="shrink-0 rounded border border-ink-300 px-2 py-1 text-xs text-ink-700 hover:bg-ink-50"
+        onClick={onClose}
+      >
+        Close
+      </button>
+    </div>
+  );
+}
+
+/* ------------------------------- capability home ------------------------- */
+
+function CapabilityHome({
+  scope,
+  setScope,
+  onSelect,
+}: {
+  scope: PortfolioRiskScope;
+  setScope: (s: PortfolioRiskScope) => void;
+  onSelect: (v: View) => void;
+}) {
+  return (
+    <div className="space-y-5 p-4">
+      <ScopePicker scope={scope} setScope={setScope} />
+      <div>
+        <div className="text-xs font-semibold uppercase tracking-wide text-ink-500">
+          What do you want to understand?
+        </div>
+        <div className="mt-2 space-y-2">
+          {CAPABILITIES.map((c) => (
+            <CapabilityCard key={c.id} c={c} onSelect={onSelect} />
+          ))}
+        </div>
+      </div>
+      <p className="text-[11px] leading-relaxed text-ink-500">
+        Every capability declares its evidence source and its supported
+        question. XOps deterministic logic decides what evidence enters each
+        answer; the model explains, it does not rank or invent.
+      </p>
+    </div>
+  );
+}
+
+function CapabilityCard({
+  c,
+  onSelect,
+}: {
+  c: CapabilityMeta;
+  onSelect: (v: View) => void;
+}) {
+  const active = c.status === "available" || c.status === "beta";
+  const badge =
+    c.status === "available"
+      ? { label: "AVAILABLE", cls: "bg-pep-900 text-white" }
+      : c.status === "beta"
+        ? { label: "BETA", cls: "bg-pep-100 text-pep-900" }
+        : { label: "COMING NEXT", cls: "bg-ink-100 text-ink-500" };
+  return (
+    <button
+      type="button"
+      disabled={!active}
+      onClick={() => active && onSelect(c.id)}
+      aria-disabled={!active}
+      data-capability={c.id}
+      className={`w-full rounded border p-3 text-left transition ${
+        active
+          ? "border-ink-200 hover:border-pep-500 hover:bg-pep-50"
+          : "cursor-not-allowed border-ink-100 bg-ink-50/50 opacity-70"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-sm font-semibold text-pep-900">{c.label}</div>
+          <div className="mt-0.5 text-sm italic text-ink-700">
+            {c.question}
+          </div>
+        </div>
+        <span
+          className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${badge.cls}`}
+        >
+          {badge.label}
+        </span>
+      </div>
+      <div className="mt-2 text-xs leading-relaxed text-ink-600">
+        {c.description}
+      </div>
+      <div className="mt-2 text-[11px] text-ink-500">
+        Evidence · <span className="font-semibold text-ink-700">{c.evidence}</span>
+      </div>
+    </button>
+  );
+}
+
+function ScopePicker({
+  scope,
+  setScope,
+}: {
+  scope: PortfolioRiskScope;
+  setScope: (s: PortfolioRiskScope) => void;
+}) {
+  return (
+    <div>
+      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-500">
+        Scope
+      </label>
+      <select
+        className="w-full rounded border border-ink-300 bg-white px-2 py-1.5 text-sm"
+        value={scope.kind === "ai_ml_segment" ? "__ai" : scope.sector_id}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (v === "__ai") setScope({ kind: "ai_ml_segment" });
+          else setScope({ kind: "sector", sector_id: v });
+        }}
+      >
+        <option value="__ai">AI/ML segment</option>
+        {SECTORS_SORTED.map((s) => (
+          <option key={s.sector_id} value={s.sector_id}>
+            {s.name}
+          </option>
+        ))}
+      </select>
+      <p className="mt-1 text-[11px] text-ink-500">
+        Scope applies to capabilities based on the semantic layer. Operational
+        Health uses whatever corpus is loaded in this browser.
+      </p>
+    </div>
+  );
+}
+
+/* ---------------------------- Portfolio Risk flow ------------------------- */
+
+function PortfolioRiskFlow({
+  scope,
+  setScope,
+}: {
+  scope: PortfolioRiskScope;
+  setScope: (s: PortfolioRiskScope) => void;
+}) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [pack, setPack] = useState<EvidencePack | null>(null);
   const [answer, setAnswer] = useState<StructuredAnswer | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Preview universe before analysing — computed via the pack builder so the
+  // number is exactly what will be used by the LLM.
+  const previewUniverse = useMemo(() => {
+    try {
+      return buildPortfolioRiskPack(scope).metadata.scope_universe;
+    } catch {
+      return null;
+    }
+  }, [scope]);
 
   const analyze = async () => {
     setPhase("calling");
@@ -87,22 +364,16 @@ export function AskXOps() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ evidence_pack: built }),
       });
-
       const contentType = res.headers.get("content-type") ?? "";
       const isJson = contentType.includes("application/json");
       const vercelErr = res.headers.get("x-vercel-error");
-
-      // Read the body once, safely, so it is available for both the internal
-      // log and the success path — but never rendered as-is to the user.
       let body: unknown = null;
       try {
         body = isJson ? await res.json() : await res.text();
       } catch {
-        /* body was already consumed or unreadable */
+        /* body unreadable */
       }
-
       if (!res.ok) {
-        // Server details go to devtools only. UI gets a mapped, benign message.
         console.warn("[AskXOps] request failed", {
           status: res.status,
           vercelErr,
@@ -113,7 +384,6 @@ export function AskXOps() {
         setPhase("error");
         return;
       }
-
       if (!isJson || body === null || typeof body !== "object") {
         console.warn("[AskXOps] unexpected response shape", {
           status: res.status,
@@ -124,7 +394,6 @@ export function AskXOps() {
         setPhase("error");
         return;
       }
-
       setAnswer((body as { answer: StructuredAnswer }).answer);
       setPhase("answered");
     } catch (e: unknown) {
@@ -134,178 +403,1100 @@ export function AskXOps() {
     }
   };
 
+  if (phase === "answered" && answer && pack) {
+    return (
+      <div className="space-y-4 p-4">
+        <PortfolioRiskDecisionBrief
+          scope={scope}
+          pack={pack}
+          answer={answer}
+          onRerun={analyze}
+        />
+      </div>
+    );
+  }
+
   return (
-    <>
+    <div className="space-y-4 p-4">
+      <div className="text-xs font-semibold uppercase tracking-wide text-ink-500">
+        Ready to analyze
+      </div>
+      <div>
+        <ScopePicker scope={scope} setScope={setScope} />
+      </div>
+      <FactRow label="Evidence" value="Semantic Layer" />
+      <FactRow
+        label="Applications screened"
+        value={previewUniverse !== null ? String(previewUniverse) : "—"}
+      />
+      <div>
+        <div className="text-xs font-semibold uppercase tracking-wide text-ink-500">
+          Question
+        </div>
+        <p className="mt-1 text-sm text-ink-900">
+          What needs attention first, and why?
+        </p>
+      </div>
       <button
         type="button"
-        className="rounded bg-pep-900 px-2.5 py-1.5 text-sm font-medium text-white hover:bg-pep-800"
-        onClick={() => setOpen(true)}
-        aria-label="Ask XOps"
+        className="w-full rounded bg-pep-900 px-3 py-2 text-sm font-semibold text-white hover:bg-pep-800 disabled:opacity-50"
+        onClick={analyze}
+        disabled={phase === "calling"}
       >
-        Ask XOps ✦
+        {phase === "calling" ? "Analyzing grounded evidence…" : "Analyze Portfolio Risk"}
       </button>
-      {open && mounted && createPortal(
-        <div
-          className="fixed inset-0 z-50 flex bg-ink-900/30"
-          onClick={() => setOpen(false)}
-          role="dialog"
-          aria-label="Ask XOps"
-        >
-          <div
-            className="ml-auto h-full w-full max-w-[560px] overflow-y-auto bg-white shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="sticky top-0 flex items-center justify-between border-b border-ink-200 bg-white px-4 py-3">
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-wide text-ink-500">
-                  Ask XOps
-                </div>
-                <div className="text-xs text-ink-500">
-                  Grounded on the semantic layer
-                </div>
-              </div>
-              <button
-                type="button"
-                className="rounded border border-ink-300 px-2 py-1 text-xs text-ink-700 hover:bg-ink-50"
-                onClick={() => setOpen(false)}
-              >
-                Close
-              </button>
-            </div>
-
-            <div className="space-y-5 p-4">
-              <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-500">
-                  Scope
-                </label>
-                <select
-                  className="w-full rounded border border-ink-300 bg-white px-2 py-1.5 text-sm"
-                  value={
-                    scope.kind === "ai_ml_segment" ? "__ai" : scope.sector_id
-                  }
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    if (v === "__ai") setScope({ kind: "ai_ml_segment" });
-                    else setScope({ kind: "sector", sector_id: v });
-                  }}
-                >
-                  <option value="__ai">AI/ML segment</option>
-                  {SECTORS_SORTED.map((s) => (
-                    <option key={s.sector_id} value={s.sector_id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <p className="text-sm text-ink-900">
-                  Which applications need attention first, and why?
-                </p>
-                <button
-                  type="button"
-                  className="mt-2 rounded bg-pep-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-pep-800 disabled:opacity-50"
-                  onClick={analyze}
-                  disabled={phase === "calling"}
-                >
-                  {phase === "calling" ? "Analyzing…" : "Analyze"}
-                </button>
-              </div>
-
-              {phase === "error" && (
-                <div className="rounded border border-bad/40 bg-bad/10 p-3 text-sm text-bad">
-                  {error}
-                </div>
-              )}
-
-              {phase === "answered" && answer && pack && (
-                <AnswerCard answer={answer} pack={pack} />
-              )}
-            </div>
-          </div>
-        </div>,
-        document.body,
+      {phase === "error" && (
+        <div className="rounded border border-bad/40 bg-bad/10 p-3 text-sm text-bad">
+          {error}
+        </div>
       )}
-    </>
+      <p className="text-[11px] text-ink-500">
+        The model receives a deterministic screening of up to ten candidates
+        drawn from the scope universe. It explains the candidates. It does not
+        rank, refilter, or invent identifiers.
+      </p>
+    </div>
   );
 }
 
-function AnswerCard({
-  answer,
+function PortfolioRiskDecisionBrief({
+  scope,
   pack,
+  answer,
+  onRerun,
 }: {
-  answer: StructuredAnswer;
+  scope: PortfolioRiskScope;
   pack: EvidencePack;
+  answer: StructuredAnswer;
+  onRerun: () => void;
 }) {
   const nameById = new Map(pack.applications.map((a) => [a.app_id, a.name]));
+  const meta = pack.metadata;
   return (
-    <div className="space-y-4">
+    <>
       <div>
-        <div className="text-xs font-semibold uppercase tracking-wide text-ink-500">
-          Answer
+        <div className="text-[11px] uppercase tracking-wide text-ink-500">
+          {scopeLabel(scope)} · Portfolio Risk
         </div>
-        <p className="text-sm text-ink-900">{answer.answer}</p>
+        <div className="mt-1 text-lg font-semibold text-pep-900">
+          Decision Brief
+        </div>
       </div>
 
-      <div>
-        <div className="text-xs font-semibold uppercase tracking-wide text-ink-500">
-          Applications requiring attention
-        </div>
-        <ol className="mt-1 space-y-2">
+      <div className="grid grid-cols-2 gap-2">
+        <MiniStat label="Applications screened" value={String(meta.scope_universe)} />
+        <MiniStat label="Candidates analyzed" value={String(pack.applications.length)} />
+      </div>
+
+      <Section title="Executive Assessment">
+        <p className="text-sm leading-relaxed text-ink-900">{answer.answer}</p>
+      </Section>
+
+      <Section title="Top Priorities">
+        <ol className="space-y-2">
           {answer.findings.map((f, i) => (
             <li
               key={i}
               className="rounded border border-ink-200 p-2.5 text-sm"
             >
-              <div className="font-semibold text-pep-900">
-                {nameById.get(f.app_id) ?? f.app_id}{" "}
-                <span className="text-xs font-normal text-ink-500">
-                  · {f.app_id}
-                </span>
-              </div>
-              <p className="mt-1 text-ink-900">{f.fact}</p>
-              <div className="mt-1.5 flex flex-wrap gap-1">
-                {f.signals_combined.map((s, j) => (
-                  <span
-                    key={j}
-                    className="rounded bg-pep-100 px-1.5 py-0.5 text-[10px] font-medium text-pep-800"
-                  >
-                    {s}
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 font-semibold text-pep-900">
+                  {nameById.get(f.app_id) ?? f.app_id}{" "}
+                  <span className="text-xs font-normal text-ink-500">
+                    · {f.app_id}
                   </span>
-                ))}
+                </div>
+                <Link
+                  href={`/app/${encodeURIComponent(f.app_id)}`}
+                  className="shrink-0 rounded border border-ink-200 px-1.5 py-0.5 text-[10px] font-semibold text-pep-800 hover:bg-pep-50"
+                >
+                  View application →
+                </Link>
+              </div>
+              <div className="mt-2">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-500">
+                  Why it matters
+                </div>
+                <p className="mt-0.5 text-ink-900">{f.fact}</p>
+              </div>
+              <div className="mt-2">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-500">
+                  Evidence
+                </div>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {f.signals_combined.map((s, j) => (
+                    <span
+                      key={j}
+                      className="rounded bg-pep-100 px-1.5 py-0.5 text-[10px] font-medium text-pep-800"
+                    >
+                      {s}
+                    </span>
+                  ))}
+                </div>
+                {f.evidence.length > 0 && (
+                  <div className="mt-1 text-[10px] text-ink-500">
+                    Cited: {f.evidence.join(" · ")}
+                  </div>
+                )}
               </div>
             </li>
           ))}
         </ol>
-      </div>
+      </Section>
 
-      <div>
-        <div className="text-xs font-semibold uppercase tracking-wide text-ink-500">
-          What this means
-        </div>
-        <p className="text-sm text-ink-900">{answer.insight}</p>
-      </div>
+      <Section title="What Should Happen Next">
+        <p className="text-sm leading-relaxed text-ink-900">
+          {answer.recommended_action}
+        </p>
+      </Section>
 
-      <div>
-        <div className="text-xs font-semibold uppercase tracking-wide text-ink-500">
-          Next step
-        </div>
-        <p className="text-sm text-ink-900">{answer.recommended_action}</p>
-      </div>
+      {answer.insight && (
+        <Section title="Cross-Cutting Insight">
+          <p className="text-sm leading-relaxed text-ink-700">{answer.insight}</p>
+        </Section>
+      )}
 
-      <div className="border-t border-ink-200 pt-2 text-xs text-ink-500">
+      {(answer.limitations?.length ?? 0) > 0 && (
+        <Section title="Limitations">
+          <ul className="list-disc pl-4 text-xs leading-relaxed text-ink-600">
+            {answer.limitations.map((l, i) => (
+              <li key={i}>{l}</li>
+            ))}
+          </ul>
+        </Section>
+      )}
+
+      <div className="border-t border-ink-200 pt-2 text-[11px] text-ink-500">
         <div>
-          Confidence: {answer.confidence}
-          {answer.limitations.length > 0 &&
-            ` · Limitations: ${answer.limitations.join("; ")}`}
+          Confidence: <span className="font-semibold text-ink-700">{answer.confidence}</span>
+          {" · "}Evidence source: Semantic Layer
         </div>
         <div className="mt-1">
-          Cut-off {pack.metadata.as_of} · scope universe{" "}
-          {pack.metadata.scope_universe} apps · top{" "}
-          {pack.metadata.ranking.top_n} shown
+          Cut-off {meta.as_of} · universe {meta.universe_apps} applications.
         </div>
-        <div className="mt-1 italic">{pack.metadata.ranking.disclaimer}</div>
+        <div className="mt-1 italic">{meta.ranking.disclaimer}</div>
+      </div>
+
+      <button
+        type="button"
+        className="w-full rounded border border-ink-300 px-3 py-2 text-sm font-medium text-pep-900 hover:bg-pep-50"
+        onClick={onRerun}
+      >
+        Re-analyze
+      </button>
+    </>
+  );
+}
+
+/* -------------------------- Operational Health flow ---------------------- */
+
+function OperationalHealthFlow() {
+  const { ready, snapshot } = useCorpus();
+
+  if (!ready) {
+    return (
+      <div className="space-y-3 p-4">
+        <div className="text-xs font-semibold uppercase tracking-wide text-ink-500">
+          Operational Health · BETA
+        </div>
+        <p className="text-sm text-ink-700">Checking browser corpus…</p>
+      </div>
+    );
+  }
+
+  if (!snapshot) {
+    return (
+      <div className="space-y-4 p-4">
+        <div className="text-xs font-semibold uppercase tracking-wide text-ink-500">
+          Operational Health · BETA
+        </div>
+        <div className="rounded border border-warn/40 bg-warn/10 p-3 text-sm text-ink-900">
+          Operational corpus required.
+          <div className="mt-1 text-xs text-ink-700">
+            This capability reads incidents and alerts from the QN operational
+            workbook loaded in this browser. Nothing is uploaded to a server.
+          </div>
+        </div>
+        <Link
+          href="/upload"
+          className="inline-block rounded bg-pep-900 px-3 py-2 text-sm font-semibold text-white hover:bg-pep-800"
+        >
+          Load data →
+        </Link>
+        <p className="text-[11px] text-ink-500">
+          Portfolio Risk is available without a loaded corpus because it reads
+          the semantic layer that ships with the application.
+        </p>
+      </div>
+    );
+  }
+
+  // Corpus is loaded. Run the deterministic aggregate analysis directly in
+  // the browser and render an Operational Brief. No LLM. The /quality tab
+  // stays available as evidence drill-down.
+  return <OperationalBrief snapshot={snapshot} />;
+}
+
+function OperationalBrief({
+  snapshot,
+}: {
+  snapshot: NonNullable<ReturnType<typeof useCorpus>["snapshot"]>;
+}) {
+  const ubg = useDataset("userByGroup");
+  const abg = useDataset("alertByGroup");
+
+  const analysis = useMemo<OperationalAnalysis>(() => {
+    return buildOperationalHealthAnalysis({
+      userRows: (ubg.rows ?? []) as any,
+      alertRows: (abg.rows ?? []) as any,
+      corpus: {
+        incidents: snapshot.population.user,
+        alerts: snapshot.population.alert,
+        total: snapshot.population.total,
+      },
+      attribution: quality?.meta?.join_coverage
+        ? {
+            ags_matched: quality.meta.join_coverage.ags_matched ?? null,
+            ags_bridge: quality.meta.join_coverage.ags_bridge ?? null,
+            ags_quality: quality.meta.join_coverage.ags_quality ?? null,
+            incident_coverage_pct:
+              quality.meta.join_coverage.incident_coverage_pct ?? null,
+          }
+        : null,
+    });
+  }, [ubg.rows, abg.rows, snapshot.population]);
+
+  const anyFindings =
+    analysis.findings.cross_signal.length +
+      analysis.findings.incident_heavy.length +
+      analysis.findings.alert_heavy.length >
+    0;
+
+  return (
+    <div className="space-y-4 p-4">
+      <div>
+        <div className="text-[11px] uppercase tracking-wide text-ink-500">
+          Operational Health · BETA
+        </div>
+        <div className="mt-1 text-lg font-semibold text-pep-900">
+          Operational Brief
+        </div>
+        <div className="text-xs text-ink-600">
+          Scope · Loaded operational corpus
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2">
+        <MiniStat label="Incidents" value={fmtNum(analysis.corpus.incidents)} />
+        <MiniStat label="Alerts" value={fmtNum(analysis.corpus.alerts)} />
+        <MiniStat label="Records" value={fmtNum(analysis.corpus.total)} />
+      </div>
+
+      <FactRow label="Evidence" value="QN Operational Corpus" />
+      <FactRow label="Workbook" value={snapshot.fileName ?? "unknown"} />
+      <FactRow label="Verified" value={snapshot.workbookVerified ? "yes" : "no"} />
+      <FactRow label="As of" value={snapshot.asOf ?? "not declared"} />
+
+      {!anyFindings && (
+        <div className="rounded border border-ink-200 bg-ink-50/50 p-3 text-sm text-ink-800">
+          The loaded corpus does not expose enough Assignment Group aggregates
+          to classify operational concentration. Load a workbook that includes
+          User_By_Group and Alert_By_Group.
+        </div>
+      )}
+
+      {analysis.findings.cross_signal.length > 0 && (
+        <Section title="Cross-signal concentration">
+          <ol className="space-y-2">
+            {analysis.findings.cross_signal.map((r) => (
+              <OperationalFinding
+                key={r.ag_key}
+                row={r}
+                whyItMatters="Operational activity is concentrated across both incident and alert populations."
+              />
+            ))}
+          </ol>
+        </Section>
+      )}
+
+      {analysis.findings.incident_heavy.length > 0 && (
+        <Section title="Incident-heavy">
+          <ol className="space-y-2">
+            {analysis.findings.incident_heavy.map((r) => (
+              <OperationalFinding
+                key={r.ag_key}
+                row={r}
+                whyItMatters="Operational activity is concentrated primarily in the incident population."
+              />
+            ))}
+          </ol>
+        </Section>
+      )}
+
+      {analysis.findings.alert_heavy.length > 0 && (
+        <Section title="Alert-heavy">
+          <ol className="space-y-2">
+            {analysis.findings.alert_heavy.map((r) => (
+              <OperationalFinding
+                key={r.ag_key}
+                row={r}
+                whyItMatters="Operational activity is concentrated primarily in the alert population."
+              />
+            ))}
+          </ol>
+        </Section>
+      )}
+
+      {analysis.quality && (
+        <Section title="Evidence quality observation">
+          <p className="text-sm leading-relaxed text-ink-900">
+            {analysis.quality.text}
+          </p>
+        </Section>
+      )}
+
+      <Section title="Application attribution">
+        <div className="rounded border border-ink-200 p-2.5 text-sm">
+          <div className="font-semibold text-pep-900">
+            {analysis.attribution.kind === "verified"
+              ? "Verified"
+              : analysis.attribution.kind === "partial"
+                ? "Partial"
+                : "Incomplete / not established"}
+            {analysis.attribution.coverage_pct != null && (
+              <span className="ml-2 text-xs font-normal text-ink-500">
+                {analysis.attribution.coverage_pct.toFixed(1)}% of ticket
+                volume via Assignment Group bridge
+              </span>
+            )}
+          </div>
+          <p className="mt-1 text-xs leading-relaxed text-ink-700">
+            {analysis.attribution.note}
+          </p>
+        </div>
+      </Section>
+
+      <Section title="What should happen next">
+        <p className="text-sm leading-relaxed text-ink-900">
+          Review Assignment Groups showing concentration across both
+          operational signals, then validate application attribution before
+          extending the analysis to business impact.
+        </p>
+      </Section>
+
+      <Section title="Limitations">
+        <ul className="list-disc pl-4 text-xs leading-relaxed text-ink-600">
+          {analysis.limitations.map((l, i) => (
+            <li key={i}>{l}</li>
+          ))}
+        </ul>
+      </Section>
+
+      <Link
+        href="/quality"
+        className="inline-block rounded bg-pep-900 px-3 py-2 text-sm font-semibold text-white hover:bg-pep-800"
+      >
+        Explore operational evidence →
+      </Link>
+
+      <div className="border-t border-ink-200 pt-2 text-[11px] text-ink-500">
+        Raw operational records are never sent to the model. Only bounded
+        aggregate evidence. Evidence source: QN Operational Corpus · loaded in
+        this browser · not combined with the semantic layer. Method:{" "}
+        {analysis.method.ranking}; top band ={" "}
+        {analysis.method.top_band} per axis.
       </div>
     </div>
   );
+}
+
+function OperationalFinding({
+  row,
+  whyItMatters,
+}: {
+  row: OperationalSignalRow;
+  whyItMatters: string;
+}) {
+  return (
+    <li className="rounded border border-ink-200 p-2.5 text-sm">
+      <div className="font-semibold text-pep-900">{row.ag_name}</div>
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <div>
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-500">
+            Incidents
+          </div>
+          <div className="text-sm font-semibold text-pep-900">
+            {row.has_incidents
+              ? row.incidents.toLocaleString("en-US")
+              : "not present"}
+          </div>
+          {row.rank_incidents != null && (
+            <div className="text-[10px] text-ink-500">
+              rank #{row.rank_incidents}
+              {row.share_incidents != null &&
+                ` · ${(row.share_incidents * 100).toFixed(1)}% of population`}
+            </div>
+          )}
+        </div>
+        <div>
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-500">
+            Alerts
+          </div>
+          <div className="text-sm font-semibold text-pep-900">
+            {row.has_alerts
+              ? row.alerts.toLocaleString("en-US")
+              : "not present"}
+          </div>
+          {row.rank_alerts != null && (
+            <div className="text-[10px] text-ink-500">
+              rank #{row.rank_alerts}
+              {row.share_alerts != null &&
+                ` · ${(row.share_alerts * 100).toFixed(1)}% of population`}
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="mt-2">
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-500">
+          Why it matters
+        </div>
+        <p className="mt-0.5 text-ink-900">{whyItMatters}</p>
+      </div>
+    </li>
+  );
+}
+
+/* ---------------------------- Blast Radius flow --------------------------- */
+
+const APP_OPTIONS_SORTED = listApplications();
+
+function BlastRadiusFlow({ context }: { context: XOpsContext }) {
+  const initial =
+    context.kind === "application" ? context.app_id : "";
+  const [appId, setAppId] = useState<string>(initial);
+
+  const brief = useMemo<BlastRadiusBrief | null>(
+    () => (appId ? buildBlastRadiusBrief(appId) : null),
+    [appId],
+  );
+
+  return (
+    <div className="space-y-4 p-4">
+      <div>
+        <div className="text-[11px] uppercase tracking-wide text-ink-500">
+          Blast Radius · BETA
+        </div>
+        <div className="mt-1 text-lg font-semibold text-pep-900">
+          Relationship Brief
+        </div>
+        <div className="text-xs text-ink-600">
+          What is connected to this application, and who is responsible?
+        </div>
+      </div>
+
+      <div>
+        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-500">
+          Application
+        </label>
+        <select
+          className="w-full rounded border border-ink-300 bg-white px-2 py-1.5 text-sm"
+          value={appId}
+          onChange={(e) => setAppId(e.target.value)}
+        >
+          <option value="">Select an application…</option>
+          {APP_OPTIONS_SORTED.map((a) => (
+            <option key={a.app_id} value={a.app_id}>
+              {a.name} · {a.app_id}
+            </option>
+          ))}
+        </select>
+        {!brief && (
+          <p className="mt-2 text-xs text-ink-600">
+            Select an application to explore its known relationships.
+            {" "}
+            <Link
+              href={browseApplicationsHref()}
+              className="text-pep-800 underline hover:text-pep-900"
+            >
+              Browse applications →
+            </Link>
+          </p>
+        )}
+      </div>
+
+      {brief && <BlastRadiusReliefBrief brief={brief} />}
+    </div>
+  );
+}
+
+function BlastRadiusReliefBrief({ brief }: { brief: BlastRadiusBrief }) {
+  const app = brief.application;
+  const noSectors = brief.business.sectors.length === 0;
+  return (
+    <>
+      <div>
+        <div className="text-lg font-semibold text-pep-900">{app.name}</div>
+        <div className="text-xs text-ink-500 num">
+          {app.app_id}
+          {app.apm ? ` · APM ${app.apm}` : ""} · {app.criticality}
+        </div>
+      </div>
+
+      <Section title="Business context">
+        <dl className="grid grid-cols-2 gap-3 text-sm">
+          <BriefField
+            label="Sector"
+            value={noSectors ? undefined : brief.business.sectors.join(", ")}
+          />
+          <BriefField label="Program" field={brief.business.program} />
+          <BriefField label="Process" field={brief.business.process} />
+        </dl>
+      </Section>
+
+      <Section title="Responsibility">
+        <dl className="grid grid-cols-2 gap-3 text-sm">
+          <BriefField
+            label="Business Owner"
+            field={brief.responsibility.business_owner}
+          />
+          <BriefField
+            label="Technical Owner"
+            field={brief.responsibility.technical_owner}
+          />
+          <BriefField label="DPM" field={brief.responsibility.dpm} />
+          <BriefField label="DPM L3" field={brief.responsibility.dpm_l3} />
+        </dl>
+      </Section>
+
+      <Section title="Operational connections">
+        <div className="space-y-2">
+          <ConnectionList
+            heading="Assignment Groups"
+            total={brief.operational.assignment_groups_total}
+            items={brief.operational.assignment_groups}
+          />
+          <ConnectionList
+            heading="Platforms"
+            total={brief.operational.platforms_total}
+            items={brief.operational.platforms}
+          />
+        </div>
+      </Section>
+
+      {brief.related_applications.total > 0 && (
+        <Section title="Related applications">
+          <p className="mb-2 text-[11px] text-ink-500">
+            Reached through a shared Assignment Group or a shared Platform.
+            These are <span className="font-semibold">derived connections</span>,
+            not confirmed dependencies.
+          </p>
+          <ol className="space-y-2">
+            {brief.related_applications.items.map((r) => (
+              <RelatedApplicationCard key={r.app_id} item={r} />
+            ))}
+          </ol>
+          {brief.related_applications.total >
+            brief.related_applications.items.length && (
+            <p className="mt-2 text-[11px] text-ink-500">
+              + {brief.related_applications.total -
+                brief.related_applications.items.length}{" "}
+              more.
+            </p>
+          )}
+        </Section>
+      )}
+
+      <Section title="Why it matters">
+        <p className="text-sm leading-relaxed text-ink-900">
+          XOps has identified the business, ownership and operational
+          relationships currently associated with this application.
+          {brief.related_applications.total > 0 &&
+            " Additional applications share operational relationships with this application. These are connections, not confirmed dependencies."}
+        </p>
+      </Section>
+
+      <Section title="Limitations">
+        <ul className="list-disc pl-4 text-xs leading-relaxed text-ink-600">
+          {brief.limitations.map((l, i) => (
+            <li key={i}>{l}</li>
+          ))}
+        </ul>
+      </Section>
+
+      <div className="flex flex-wrap gap-2">
+        <Link
+          href={brief.routes.view_application}
+          className="rounded bg-pep-900 px-3 py-2 text-sm font-semibold text-white hover:bg-pep-800"
+        >
+          View application →
+        </Link>
+        <Link
+          href={brief.routes.view_relationship_graph}
+          className="rounded border border-pep-800 px-3 py-2 text-sm font-semibold text-pep-800 hover:bg-pep-50"
+        >
+          View relationship graph →
+        </Link>
+      </div>
+
+      <div className="border-t border-ink-200 pt-2 text-[11px] text-ink-500">
+        Evidence source: Semantic Layer. Assignment Groups and Platforms are
+        declared relationships. Related applications are derived from shared
+        operational connections, not from an explicit dependency edge.
+      </div>
+    </>
+  );
+}
+
+function BriefField({
+  label,
+  field,
+  value,
+}: {
+  label: string;
+  field?: Field;
+  value?: string;
+}) {
+  const rendered =
+    value != null && value !== ""
+      ? value
+      : field && field.present
+        ? field.value
+        : field?.note === "tbd"
+          ? "TBD"
+          : "Not declared";
+  const missing =
+    (value == null || value === "") &&
+    (!field || !field.present);
+  return (
+    <div>
+      <dt className="text-[10px] font-semibold uppercase tracking-wide text-ink-500">
+        {label}
+      </dt>
+      <dd
+        className={`mt-0.5 text-sm ${missing ? "italic text-ink-500" : "text-ink-900"}`}
+      >
+        {rendered}
+      </dd>
+    </div>
+  );
+}
+
+function ConnectionList({
+  heading,
+  total,
+  items,
+}: {
+  heading: string;
+  total: number;
+  items: OperationalConnection[];
+}) {
+  return (
+    <div>
+      <div className="flex items-baseline justify-between">
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-500">
+          {heading}
+        </div>
+        <div className="text-xs text-ink-500">
+          {total === 0 ? "not declared" : total}
+        </div>
+      </div>
+      {total === 0 ? (
+        <p className="mt-1 text-xs italic text-ink-500">
+          Not declared for this application.
+        </p>
+      ) : (
+        <ul className="mt-1 space-y-1">
+          {items.map((c) => (
+            <li
+              key={c.id}
+              className="rounded border border-ink-200 px-2 py-1 text-sm"
+            >
+              <div className="font-medium text-pep-900">{c.name}</div>
+              <div className="text-[10px] text-ink-500">
+                {c.meta ? `${c.meta} · ` : ""}
+                <span className="uppercase tracking-wide">
+                  {c.evidence}
+                </span>
+              </div>
+            </li>
+          ))}
+          {total > items.length && (
+            <li className="text-[11px] text-ink-500">
+              + {total - items.length} more.
+            </li>
+          )}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function RelatedApplicationCard({ item }: { item: RelatedApplication }) {
+  return (
+    <li className="rounded border border-ink-200 p-2 text-sm">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="font-semibold text-pep-900">{item.name}</div>
+          <div className="text-[10px] text-ink-500 num">{item.app_id}</div>
+        </div>
+        <Link
+          href={`/app/${encodeURIComponent(item.app_id)}`}
+          className="shrink-0 rounded border border-ink-200 px-1.5 py-0.5 text-[10px] font-semibold text-pep-800 hover:bg-pep-50"
+        >
+          Open →
+        </Link>
+      </div>
+      <div className="mt-1 flex flex-wrap items-center gap-1 text-[10px]">
+        <span className="rounded bg-ink-100 px-1.5 py-0.5 font-semibold uppercase tracking-wide text-ink-700">
+          Derived connection
+        </span>
+        <span className="text-ink-500">
+          {item.reason.kind === "shared_assignment_group"
+            ? "Shared Assignment Group:"
+            : "Shared Platform:"}{" "}
+          <span className="text-ink-900">{item.reason.shared}</span>
+        </span>
+      </div>
+    </li>
+  );
+}
+
+/* --------------------------- RCA Intelligence flow ------------------------ */
+
+function RcaIntelligenceFlow() {
+  const { ready, snapshot } = useCorpus();
+
+  if (!ready) {
+    return (
+      <div className="space-y-3 p-4">
+        <div className="text-xs font-semibold uppercase tracking-wide text-ink-500">
+          RCA Intelligence · BETA
+        </div>
+        <p className="text-sm text-ink-700">Checking browser corpus…</p>
+      </div>
+    );
+  }
+
+  if (!snapshot) {
+    return (
+      <div className="space-y-4 p-4">
+        <div className="text-xs font-semibold uppercase tracking-wide text-ink-500">
+          RCA Intelligence · BETA
+        </div>
+        <div className="rounded border border-warn/40 bg-warn/10 p-3 text-sm text-ink-900">
+          Operational corpus required.
+          <div className="mt-1 text-xs text-ink-700">
+            RCA Intelligence surfaces evidence for investigation. It reads the
+            classified incident aggregates and close-note quality signals from
+            a QN workbook loaded in this browser. Nothing is uploaded to a
+            server.
+          </div>
+        </div>
+        <Link
+          href="/upload"
+          className="inline-block rounded bg-pep-900 px-3 py-2 text-sm font-semibold text-white hover:bg-pep-800"
+        >
+          Load data →
+        </Link>
+      </div>
+    );
+  }
+
+  return <InvestigationBrief snapshot={snapshot} />;
+}
+
+function InvestigationBrief({
+  snapshot,
+}: {
+  snapshot: NonNullable<ReturnType<typeof useCorpus>["snapshot"]>;
+}) {
+  const ubg = useDataset("userByGroup");
+  const abg = useDataset("alertByGroup");
+  const bd = useDataset("byDecalogue");
+  const da = useDataset("dualAxis");
+  const cn = useDataset("complianceCloseNotes");
+  const ca = useDataset("complianceAlerts");
+
+  // Reuse the Operational Health analysis for the deterministic operational
+  // context. Same source of truth; no separate ranking.
+  const operational = useMemo(() => {
+    return buildOperationalHealthAnalysis({
+      userRows: (ubg.rows ?? []) as any,
+      alertRows: (abg.rows ?? []) as any,
+      corpus: {
+        incidents: snapshot.population.user,
+        alerts: snapshot.population.alert,
+        total: snapshot.population.total,
+      },
+      attribution: quality?.meta?.join_coverage
+        ? {
+            ags_matched: quality.meta.join_coverage.ags_matched ?? null,
+            ags_bridge: quality.meta.join_coverage.ags_bridge ?? null,
+            ags_quality: quality.meta.join_coverage.ags_quality ?? null,
+            incident_coverage_pct:
+              quality.meta.join_coverage.incident_coverage_pct ?? null,
+          }
+        : null,
+    });
+  }, [ubg.rows, abg.rows, snapshot.population]);
+
+  const brief: RcaBrief = useMemo(() => {
+    return buildRcaInvestigationBrief({
+      corpus: {
+        incidents: snapshot.population.user,
+        alerts: snapshot.population.alert,
+        total: snapshot.population.total,
+      },
+      decalogue: {
+        present: !!bd.present,
+        rows: (bd.rows ?? []) as any,
+        summary: (bd.facts?.summary as Record<string, number | string>) ?? null,
+      },
+      dualAxis: {
+        present: !!da.present,
+        total:
+          ((da.facts?.total as Record<string, number | string>) ?? null),
+      },
+      compliance: {
+        close_notes_present: !!cn.present,
+        alerts_present: !!ca.present,
+      },
+      operational,
+    });
+  }, [
+    snapshot.population,
+    bd.present,
+    bd.rows,
+    bd.facts,
+    da.present,
+    da.facts,
+    cn.present,
+    ca.present,
+    operational,
+  ]);
+
+  const anythingToShow =
+    brief.signals.length > 0 ||
+    brief.evidence_quality !== null ||
+    brief.alert_evidence !== null ||
+    brief.operational_context.length > 0;
+
+  return (
+    <div className="space-y-4 p-4">
+      <div>
+        <div className="text-[11px] uppercase tracking-wide text-ink-500">
+          RCA Intelligence · BETA
+        </div>
+        <div className="mt-1 text-lg font-semibold text-pep-900">
+          Investigation Brief
+        </div>
+        <div className="text-xs text-ink-600">
+          Scope · Loaded operational corpus
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2">
+        <MiniStat label="Incidents" value={fmtNum(brief.corpus.incidents)} />
+        <MiniStat label="Alerts" value={fmtNum(brief.corpus.alerts)} />
+        <MiniStat label="Records" value={fmtNum(brief.corpus.total)} />
+      </div>
+
+      {!anythingToShow && (
+        <div className="rounded border border-ink-200 bg-ink-50/50 p-3 text-sm text-ink-800">
+          The loaded corpus does not expose enough aggregate evidence to
+          suggest an investigation starting point. Load a workbook that
+          includes By_Decalogue and Dual_Axis.
+        </div>
+      )}
+
+      {brief.signals.length > 0 && (
+        <Section title="Investigation signals">
+          <ol className="space-y-2">
+            {brief.signals.map((s) => (
+              <li
+                key={s.code}
+                className="rounded border border-ink-200 p-2.5 text-sm"
+              >
+                <div className="flex items-baseline justify-between gap-2">
+                  <div className="font-semibold text-pep-900">
+                    {s.code} · {s.pattern}
+                  </div>
+                  <div className="text-xs text-ink-500">
+                    {s.incidents.toLocaleString("en-US")} incidents
+                    {s.share_of_classified != null &&
+                      ` · ${(s.share_of_classified * 100).toFixed(1)}% of classified`}
+                  </div>
+                </div>
+                <div className="mt-1.5">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-500">
+                    Why review this
+                  </div>
+                  <p className="mt-0.5 text-ink-900">{s.why_review}</p>
+                </div>
+                <div className="mt-1.5 text-[10px] text-ink-500">
+                  Evidence source · QN Operational Corpus · By_Decalogue
+                </div>
+              </li>
+            ))}
+          </ol>
+        </Section>
+      )}
+
+      {brief.evidence_quality && (
+        <Section title="Evidence quality">
+          <div className="rounded border border-ink-200 p-2.5 text-sm">
+            <p className="text-ink-900">{brief.evidence_quality.text}</p>
+            <div className="mt-1.5">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-500">
+                Why it matters
+              </div>
+              <p className="mt-0.5 text-ink-900">
+                {brief.evidence_quality.why_it_matters}
+              </p>
+            </div>
+            <div className="mt-1.5 text-[10px] text-ink-500">
+              Evidence source · QN Operational Corpus · Dual_Axis
+            </div>
+          </div>
+        </Section>
+      )}
+
+      {brief.alert_evidence && (
+        <Section title="Alert evidence">
+          <div className="rounded border border-ink-200 p-2.5 text-sm">
+            <p className="text-ink-900">{brief.alert_evidence.text}</p>
+            <div className="mt-1.5">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-500">
+                Why review this
+              </div>
+              <p className="mt-0.5 text-ink-900">
+                {brief.alert_evidence.why_review}
+              </p>
+            </div>
+            <div className="mt-1.5 text-[10px] text-ink-500">
+              Evidence source · QN Operational Corpus · Compliance_Alerts
+            </div>
+          </div>
+        </Section>
+      )}
+
+      {brief.operational_context.length > 0 && (
+        <Section title="Operational context">
+          <p className="mb-2 text-[11px] text-ink-500">
+            Reused from the Operational Health analysis (same source of truth).
+          </p>
+          <ol className="space-y-2">
+            {brief.operational_context.map((c) => (
+              <li
+                key={c.ag_name}
+                className="rounded border border-ink-200 p-2.5 text-sm"
+              >
+                <div className="font-semibold text-pep-900">{c.ag_name}</div>
+                <div className="mt-1 grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-500">
+                      Incident rank
+                    </div>
+                    <div className="text-ink-900">
+                      {c.rank_incidents != null ? `#${c.rank_incidents}` : "not present"}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-500">
+                      Alert rank
+                    </div>
+                    <div className="text-ink-900">
+                      {c.rank_alerts != null ? `#${c.rank_alerts}` : "not present"}
+                    </div>
+                  </div>
+                </div>
+                <p className="mt-1.5 text-ink-900">{c.why_review}</p>
+              </li>
+            ))}
+          </ol>
+        </Section>
+      )}
+
+      <Section title="What should I investigate next?">
+        <ol className="list-decimal pl-5 text-sm leading-relaxed text-ink-900">
+          {brief.next_steps.map((s, i) => (
+            <li key={i} className="mt-1">
+              {s}
+            </li>
+          ))}
+        </ol>
+      </Section>
+
+      <Section title="Limitations">
+        <p className="text-xs text-ink-700">
+          RCA Intelligence surfaces evidence for investigation. It does not
+          establish root cause.
+        </p>
+        <ul className="mt-1 list-disc pl-4 text-xs leading-relaxed text-ink-600">
+          {brief.limitations.map((l, i) => (
+            <li key={i}>{l}</li>
+          ))}
+        </ul>
+      </Section>
+
+      <Link
+        href="/quality"
+        className="inline-block rounded bg-pep-900 px-3 py-2 text-sm font-semibold text-white hover:bg-pep-800"
+      >
+        Explore RCA evidence →
+      </Link>
+
+      <div className="border-t border-ink-200 pt-2 text-[11px] text-ink-500">
+        Raw operational records are never sent to the model. Only aggregate
+        evidence. Evidence source: QN Operational Corpus · loaded in this
+        browser · not combined with the semantic layer.
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------ small pieces ------------------------------ */
+
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <div className="text-xs font-semibold uppercase tracking-wide text-ink-500">
+        {title}
+      </div>
+      <div className="mt-1">{children}</div>
+    </div>
+  );
+}
+
+function FactRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 border-b border-ink-100 py-1.5">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-ink-500">
+        {label}
+      </div>
+      <div className="text-sm font-semibold text-pep-900">{value}</div>
+    </div>
+  );
+}
+
+function MiniStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded border border-ink-200 p-2">
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-500">
+        {label}
+      </div>
+      <div className="mt-0.5 text-base font-semibold text-pep-900">{value}</div>
+    </div>
+  );
+}
+
+function fmtNum(n: number | null | undefined): string {
+  if (n == null) return "—";
+  return n.toLocaleString("en-US");
 }

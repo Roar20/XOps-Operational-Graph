@@ -10,7 +10,9 @@ async function readJson(res: Response) {
 
 describe("handleInsightRequest — contract", () => {
   it("400 when the evidence_pack is missing", async () => {
-    const res = await handleInsightRequest({}, async () => ({} as StructuredAnswer));
+    const res = await handleInsightRequest({}, async () => ({
+      answer: {} as StructuredAnswer,
+    }));
     assert.equal(res.status, 400);
     const body = await readJson(res);
     assert.equal(body.error, "invalid_evidence_pack");
@@ -37,7 +39,7 @@ describe("handleInsightRequest — contract", () => {
     };
     const res = await handleInsightRequest(
       { evidence_pack: pack },
-      async () => answer,
+      async () => ({ answer }),
     );
     assert.equal(res.status, 200);
     const body = await readJson(res);
@@ -65,7 +67,7 @@ describe("handleInsightRequest — contract", () => {
     };
     const res = await handleInsightRequest(
       { evidence_pack: pack },
-      async () => badAnswer,
+      async () => ({ answer: badAnswer }),
     );
     assert.equal(res.status, 502);
     const body = await readJson(res);
@@ -93,7 +95,7 @@ describe("handleInsightRequest — contract", () => {
     } as unknown as StructuredAnswer;
     const res = await handleInsightRequest(
       { evidence_pack: pack },
-      async () => badAnswer,
+      async () => ({ answer: badAnswer }),
     );
     assert.equal(res.status, 502);
     const body = await readJson(res);
@@ -120,7 +122,10 @@ describe("handleInsightRequest — contract", () => {
     assert.ok(firstId);
 
     const cases: Array<[string, Promise<Response>]> = [
-      ["invalid_evidence_pack", handleInsightRequest({}, async () => ({} as StructuredAnswer))],
+      [
+        "invalid_evidence_pack",
+        handleInsightRequest({}, async () => ({ answer: {} as StructuredAnswer })),
+      ],
       [
         "model_call_failed",
         handleInsightRequest({ evidence_pack: pack }, async () => {
@@ -129,8 +134,8 @@ describe("handleInsightRequest — contract", () => {
       ],
       [
         "invalid_llm_output",
-        handleInsightRequest({ evidence_pack: pack }, async () =>
-          ({
+        handleInsightRequest({ evidence_pack: pack }, async () => ({
+          answer: {
             answer: "x",
             findings: [
               { app_id: firstId, fact: "x", evidence: [firstId], signals_combined: ["only_one"] },
@@ -139,24 +144,27 @@ describe("handleInsightRequest — contract", () => {
             recommended_action: "x",
             confidence: "low",
             limitations: [],
-          }) as unknown as StructuredAnswer),
+          } as unknown as StructuredAnswer,
+        })),
       ],
       [
         "hallucinated_ids",
         handleInsightRequest({ evidence_pack: pack }, async () => ({
-          answer: "x",
-          findings: [
-            {
-              app_id: "APP-INVENTED",
-              fact: "x",
-              evidence: [firstId],
-              signals_combined: ["a", "b"],
-            },
-          ],
-          insight: "x",
-          recommended_action: "x",
-          confidence: "low",
-          limitations: [],
+          answer: {
+            answer: "x",
+            findings: [
+              {
+                app_id: "APP-INVENTED",
+                fact: "x",
+                evidence: [firstId],
+                signals_combined: ["a", "b"],
+              },
+            ],
+            insight: "x",
+            recommended_action: "x",
+            confidence: "low",
+            limitations: [],
+          },
         })),
       ],
     ];
