@@ -1,4 +1,8 @@
-import { generateObject, type LanguageModelUsage } from "ai";
+import {
+  generateObject,
+  NoObjectGeneratedError,
+  type LanguageModelUsage,
+} from "ai";
 import {
   evidencePackSchema,
   structuredAnswerSchema,
@@ -34,6 +38,32 @@ function elapsedMs(from: bigint, to: bigint): number {
 function errorType(e: unknown): string {
   const name = e instanceof Error ? e.constructor.name : "Unknown";
   return name.replace(/[^A-Za-z0-9_]/g, "_").slice(0, 40);
+}
+
+/**
+ * Diagnostic-only extras for NoObjectGeneratedError. Reports structural
+ * metadata that lets a human classify the failure (truncation vs schema
+ * violation vs parse error vs transport) without ever exposing model output.
+ *
+ * NEVER logs: error.text (only its length), error.cause.message (only the
+ * cause class name), response.body, response.headers, prompts, evidence,
+ * user data.
+ *
+ * Returns an empty string for any other error so the base log line is
+ * unchanged for non-object-generation failures.
+ */
+function noObjectDiagnostics(e: unknown): string {
+  if (!NoObjectGeneratedError.isInstance(e)) return "";
+  const finish = e.finishReason ?? "unknown";
+  const out = e.usage?.outputTokens ?? "unknown";
+  const total = e.usage?.totalTokens ?? "unknown";
+  const textLen =
+    typeof e.text === "string" ? e.text.length : "unknown";
+  const rawCause = (e as { cause?: unknown }).cause;
+  const causeCls =
+    rawCause instanceof Error ? rawCause.constructor.name : "unknown";
+  const respModel = e.response?.modelId ?? "unknown";
+  return ` finish_reason=${finish} output_tokens=${out} total_tokens=${total} text_len=${textLen} cause=${causeCls} response_model=${respModel}`;
 }
 
 /**
@@ -87,7 +117,7 @@ export async function handleInsightRequest(
     const modelEnd = process.hrtime.bigint();
     const modelMs = elapsedMs(modelStart, modelEnd);
     console.log(
-      `[XOps Insight] req=${reqId} stage=model_error model_ms=${modelMs} error_type=${errorType(e)}`,
+      `[XOps Insight] req=${reqId} stage=model_error model_ms=${modelMs} error_type=${errorType(e)}${noObjectDiagnostics(e)}`,
     );
     console.log(
       `[XOps Insight] req=${reqId} stage=complete total_ms=${elapsedMs(t0, modelEnd)} outcome=model_failed`,
