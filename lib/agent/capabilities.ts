@@ -4,12 +4,12 @@
  * unit test can assert the evidence-source contract without a React runtime.
  *
  * Contract enforced by the tests in this module:
- *  - Exactly one capability is fully "available" (Portfolio Risk).
- *  - Exactly one capability is in "beta" (Operational Health).
+ *  - Portfolio Risk is the fully "available" capability.
+ *  - Operational Health and Blast Radius are "beta" capabilities.
  *  - Portfolio Risk declares Semantic Layer evidence and never QN.
  *  - Operational Health declares QN Operational Corpus evidence.
- *  - The remaining three capabilities are visible but "coming_next" (no
- *    backend, no click-through).
+ *  - Blast Radius declares Semantic Layer evidence (relationship graph).
+ *  - Evidence Gaps and RCA Intelligence are visible but "coming_next".
  */
 
 export type CapabilityId =
@@ -61,11 +61,11 @@ export const CAPABILITIES: CapabilityMeta[] = [
   {
     id: "blast_radius",
     label: "Blast Radius",
-    question: "What could be impacted if something fails?",
+    question: "What is connected to this application, and who is responsible?",
     description:
-      "Map downstream impact of an application through the semantic layer relationships.",
+      "Explore the business, ownership and operational relationships already declared in the semantic layer for a selected application.",
     evidence: "Semantic Layer",
-    status: "coming_next",
+    status: "beta",
   },
   {
     id: "rca_intelligence",

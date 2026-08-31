@@ -3,7 +3,9 @@ import { notFound } from "next/navigation";
 import {
   applications, getApp, meta, agsOf, platformsOf, qualityOfAgs,
   multiAgApps, maxAgCount, UNIVERSE, quality, isTbd, computeGaps,
+  neighbourhood,
 } from "@/lib/data";
+import { NeighbourGraph } from "@/components/NeighbourGraph";
 import { AiTag, ApproxTag, CriticalityChip, GateChips, NotRoutableTag, SupportLoad, TbdValue } from "@/components/Chips";
 import { ImpactChip } from "@/components/ImpactChip";
 import { InlineMetric, Metric } from "@/components/Metric";
@@ -426,6 +428,25 @@ export default async function AppResolverPage({ params }: { params: Promise<{ ap
         </ul>
         <p className="subtle mt-3">Data cut-off {meta.as_of}. Source: {meta.source_file}.</p>
       </section>
+
+      {/* Anchor target for "View relationship graph →" from Ask XOps.
+          Reuses the existing NeighbourGraph and the semantic-layer
+          neighbourhood() builder. One-hop, deterministic, no dependency
+          inference. */}
+      {(() => {
+        const n = neighbourhood("application", app.app_id);
+        if (!n) return null;
+        return (
+          <section id="relationship-graph" className="card card-pad">
+            <SectionHeader
+              kicker={`Neighbourhood of ${n.focus.label}`}
+              title="Relationship graph"
+            />
+            <p className="subtle mb-3">{n.note}</p>
+            <NeighbourGraph data={n} />
+          </section>
+        );
+      })()}
     </div>
   );
 }

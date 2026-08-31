@@ -22,10 +22,12 @@ describe("Ask XOps capability catalog", () => {
     assert.equal(available[0].id, "portfolio_risk");
   });
 
-  it("exposes exactly one BETA capability, and it is Operational Health", () => {
+  it("exposes exactly two BETA capabilities: Operational Health and Blast Radius", () => {
     const beta = CAPABILITIES.filter((c) => c.status === "beta");
-    assert.equal(beta.length, 1);
-    assert.equal(beta[0].id, "operational_health");
+    assert.deepEqual(
+      beta.map((c) => c.id).sort(),
+      ["blast_radius", "operational_health"],
+    );
   });
 
   it("Portfolio Risk declares Semantic Layer evidence and never QN", () => {
@@ -41,8 +43,8 @@ describe("Ask XOps capability catalog", () => {
     assert.match(c!.evidence, /QN Operational Corpus/);
   });
 
-  it("evidence_gaps, blast_radius and rca_intelligence are COMING_NEXT", () => {
-    for (const id of ["evidence_gaps", "blast_radius", "rca_intelligence"] as const) {
+  it("evidence_gaps and rca_intelligence are COMING_NEXT", () => {
+    for (const id of ["evidence_gaps", "rca_intelligence"] as const) {
       const c = CAPABILITIES.find((x) => x.id === id);
       assert.ok(c, `${id} missing`);
       assert.equal(c!.status, "coming_next");

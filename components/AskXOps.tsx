@@ -14,10 +14,20 @@ import {
   type OperationalAnalysis,
   type OperationalSignalRow,
 } from "@/lib/agent/operational-health";
+import {
+  browseApplicationsHref,
+  buildBlastRadiusBrief,
+  listApplications,
+  type BlastRadiusBrief,
+  type Field,
+  type OperationalConnection,
+  type RelatedApplication,
+} from "@/lib/agent/blast-radius-brief";
 import type {
   EvidencePack,
   PortfolioRiskScope,
   StructuredAnswer,
+  XOpsContext,
 } from "@/lib/agent/insights/types";
 import {
   CAPABILITIES,
@@ -139,6 +149,7 @@ function Drawer({ onClose }: { onClose: () => void }) {
             <PortfolioRiskFlow scope={scope} setScope={setScope} />
           )}
           {view === "operational_health" && <OperationalHealthFlow />}
+          {view === "blast_radius" && <BlastRadiusFlow context={context} />}
         </div>
       </div>
     </div>
@@ -845,6 +856,301 @@ function OperationalFinding({
           Why it matters
         </div>
         <p className="mt-0.5 text-ink-900">{whyItMatters}</p>
+      </div>
+    </li>
+  );
+}
+
+/* ---------------------------- Blast Radius flow --------------------------- */
+
+const APP_OPTIONS_SORTED = listApplications();
+
+function BlastRadiusFlow({ context }: { context: XOpsContext }) {
+  const initial =
+    context.kind === "application" ? context.app_id : "";
+  const [appId, setAppId] = useState<string>(initial);
+
+  const brief = useMemo<BlastRadiusBrief | null>(
+    () => (appId ? buildBlastRadiusBrief(appId) : null),
+    [appId],
+  );
+
+  return (
+    <div className="space-y-4 p-4">
+      <div>
+        <div className="text-[11px] uppercase tracking-wide text-ink-500">
+          Blast Radius · BETA
+        </div>
+        <div className="mt-1 text-lg font-semibold text-pep-900">
+          Relationship Brief
+        </div>
+        <div className="text-xs text-ink-600">
+          What is connected to this application, and who is responsible?
+        </div>
+      </div>
+
+      <div>
+        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-500">
+          Application
+        </label>
+        <select
+          className="w-full rounded border border-ink-300 bg-white px-2 py-1.5 text-sm"
+          value={appId}
+          onChange={(e) => setAppId(e.target.value)}
+        >
+          <option value="">Select an application…</option>
+          {APP_OPTIONS_SORTED.map((a) => (
+            <option key={a.app_id} value={a.app_id}>
+              {a.name} · {a.app_id}
+            </option>
+          ))}
+        </select>
+        {!brief && (
+          <p className="mt-2 text-xs text-ink-600">
+            Select an application to explore its known relationships.
+            {" "}
+            <Link
+              href={browseApplicationsHref()}
+              className="text-pep-800 underline hover:text-pep-900"
+            >
+              Browse applications →
+            </Link>
+          </p>
+        )}
+      </div>
+
+      {brief && <BlastRadiusReliefBrief brief={brief} />}
+    </div>
+  );
+}
+
+function BlastRadiusReliefBrief({ brief }: { brief: BlastRadiusBrief }) {
+  const app = brief.application;
+  const noSectors = brief.business.sectors.length === 0;
+  return (
+    <>
+      <div>
+        <div className="text-lg font-semibold text-pep-900">{app.name}</div>
+        <div className="text-xs text-ink-500 num">
+          {app.app_id}
+          {app.apm ? ` · APM ${app.apm}` : ""} · {app.criticality}
+        </div>
+      </div>
+
+      <Section title="Business context">
+        <dl className="grid grid-cols-2 gap-3 text-sm">
+          <BriefField
+            label="Sector"
+            value={noSectors ? undefined : brief.business.sectors.join(", ")}
+          />
+          <BriefField label="Program" field={brief.business.program} />
+          <BriefField label="Process" field={brief.business.process} />
+        </dl>
+      </Section>
+
+      <Section title="Responsibility">
+        <dl className="grid grid-cols-2 gap-3 text-sm">
+          <BriefField
+            label="Business Owner"
+            field={brief.responsibility.business_owner}
+          />
+          <BriefField
+            label="Technical Owner"
+            field={brief.responsibility.technical_owner}
+          />
+          <BriefField label="DPM" field={brief.responsibility.dpm} />
+          <BriefField label="DPM L3" field={brief.responsibility.dpm_l3} />
+        </dl>
+      </Section>
+
+      <Section title="Operational connections">
+        <div className="space-y-2">
+          <ConnectionList
+            heading="Assignment Groups"
+            total={brief.operational.assignment_groups_total}
+            items={brief.operational.assignment_groups}
+          />
+          <ConnectionList
+            heading="Platforms"
+            total={brief.operational.platforms_total}
+            items={brief.operational.platforms}
+          />
+        </div>
+      </Section>
+
+      {brief.related_applications.total > 0 && (
+        <Section title="Related applications">
+          <p className="mb-2 text-[11px] text-ink-500">
+            Reached through a shared Assignment Group or a shared Platform.
+            These are <span className="font-semibold">derived connections</span>,
+            not confirmed dependencies.
+          </p>
+          <ol className="space-y-2">
+            {brief.related_applications.items.map((r) => (
+              <RelatedApplicationCard key={r.app_id} item={r} />
+            ))}
+          </ol>
+          {brief.related_applications.total >
+            brief.related_applications.items.length && (
+            <p className="mt-2 text-[11px] text-ink-500">
+              + {brief.related_applications.total -
+                brief.related_applications.items.length}{" "}
+              more.
+            </p>
+          )}
+        </Section>
+      )}
+
+      <Section title="Why it matters">
+        <p className="text-sm leading-relaxed text-ink-900">
+          XOps has identified the business, ownership and operational
+          relationships currently associated with this application.
+          {brief.related_applications.total > 0 &&
+            " Additional applications share operational relationships with this application. These are connections, not confirmed dependencies."}
+        </p>
+      </Section>
+
+      <Section title="Limitations">
+        <ul className="list-disc pl-4 text-xs leading-relaxed text-ink-600">
+          {brief.limitations.map((l, i) => (
+            <li key={i}>{l}</li>
+          ))}
+        </ul>
+      </Section>
+
+      <div className="flex flex-wrap gap-2">
+        <Link
+          href={brief.routes.view_application}
+          className="rounded bg-pep-900 px-3 py-2 text-sm font-semibold text-white hover:bg-pep-800"
+        >
+          View application →
+        </Link>
+        <Link
+          href={brief.routes.view_relationship_graph}
+          className="rounded border border-pep-800 px-3 py-2 text-sm font-semibold text-pep-800 hover:bg-pep-50"
+        >
+          View relationship graph →
+        </Link>
+      </div>
+
+      <div className="border-t border-ink-200 pt-2 text-[11px] text-ink-500">
+        Evidence source: Semantic Layer. Assignment Groups and Platforms are
+        declared relationships. Related applications are derived from shared
+        operational connections, not from an explicit dependency edge.
+      </div>
+    </>
+  );
+}
+
+function BriefField({
+  label,
+  field,
+  value,
+}: {
+  label: string;
+  field?: Field;
+  value?: string;
+}) {
+  const rendered =
+    value != null && value !== ""
+      ? value
+      : field && field.present
+        ? field.value
+        : field?.note === "tbd"
+          ? "TBD"
+          : "Not declared";
+  const missing =
+    (value == null || value === "") &&
+    (!field || !field.present);
+  return (
+    <div>
+      <dt className="text-[10px] font-semibold uppercase tracking-wide text-ink-500">
+        {label}
+      </dt>
+      <dd
+        className={`mt-0.5 text-sm ${missing ? "italic text-ink-500" : "text-ink-900"}`}
+      >
+        {rendered}
+      </dd>
+    </div>
+  );
+}
+
+function ConnectionList({
+  heading,
+  total,
+  items,
+}: {
+  heading: string;
+  total: number;
+  items: OperationalConnection[];
+}) {
+  return (
+    <div>
+      <div className="flex items-baseline justify-between">
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-500">
+          {heading}
+        </div>
+        <div className="text-xs text-ink-500">
+          {total === 0 ? "not declared" : total}
+        </div>
+      </div>
+      {total === 0 ? (
+        <p className="mt-1 text-xs italic text-ink-500">
+          Not declared for this application.
+        </p>
+      ) : (
+        <ul className="mt-1 space-y-1">
+          {items.map((c) => (
+            <li
+              key={c.id}
+              className="rounded border border-ink-200 px-2 py-1 text-sm"
+            >
+              <div className="font-medium text-pep-900">{c.name}</div>
+              <div className="text-[10px] text-ink-500">
+                {c.meta ? `${c.meta} · ` : ""}
+                <span className="uppercase tracking-wide">
+                  {c.evidence}
+                </span>
+              </div>
+            </li>
+          ))}
+          {total > items.length && (
+            <li className="text-[11px] text-ink-500">
+              + {total - items.length} more.
+            </li>
+          )}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function RelatedApplicationCard({ item }: { item: RelatedApplication }) {
+  return (
+    <li className="rounded border border-ink-200 p-2 text-sm">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="font-semibold text-pep-900">{item.name}</div>
+          <div className="text-[10px] text-ink-500 num">{item.app_id}</div>
+        </div>
+        <Link
+          href={`/app/${encodeURIComponent(item.app_id)}`}
+          className="shrink-0 rounded border border-ink-200 px-1.5 py-0.5 text-[10px] font-semibold text-pep-800 hover:bg-pep-50"
+        >
+          Open →
+        </Link>
+      </div>
+      <div className="mt-1 flex flex-wrap items-center gap-1 text-[10px]">
+        <span className="rounded bg-ink-100 px-1.5 py-0.5 font-semibold uppercase tracking-wide text-ink-700">
+          Derived connection
+        </span>
+        <span className="text-ink-500">
+          {item.reason.kind === "shared_assignment_group"
+            ? "Shared Assignment Group:"
+            : "Shared Platform:"}{" "}
+          <span className="text-ink-900">{item.reason.shared}</span>
+        </span>
       </div>
     </li>
   );
